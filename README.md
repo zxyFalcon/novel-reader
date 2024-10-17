@@ -1,6 +1,6 @@
 ## 小说阅读
 
-exe下载地址：<a href="https://github.com/zxyFalcon/novel-reader/releases">novel-reader</a>
+exe下载：<a href="https://github.com/zxyFalcon/novel-reader/releases">novel-reader</a>
 
 ### 功能介绍
 * 启动后通过文件选择器选择文件进行阅读，目前仅支持txt
