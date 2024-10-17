@@ -3,8 +3,8 @@ package com.falcon.reader;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
+import com.falcon.reader.util.EncodingDetect;
 import javafx.util.Pair;
-import org.springframework.util.StringUtils;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -166,7 +166,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         pages.clear();
         try {
             BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(fileName),
-                    com.sjfl.main.EncodingDetect.getJavaEncode(fileName)));
+                    EncodingDetect.getJavaEncode(fileName)));
             String line = reader.readLine();
             StringBuilder text = new StringBuilder();
 
