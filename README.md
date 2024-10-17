@@ -1,6 +1,6 @@
 ## 小说阅读
 
-exe下载地址：<a href="https://github.com/7325156/jjdown/releases">novel-reader.exe</a>
+exe下载地址：<a href="https://github.com/zxyFalcon/novel-reader/releases">novel-reader.exe</a>
 
 ### 功能介绍
 * 启动后通过文件选择器选择文件进行阅读，目前仅支持txt
