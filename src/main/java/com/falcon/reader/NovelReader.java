@@ -2,11 +2,12 @@ package com.falcon.reader;
 
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.StrUtil;
-import com.falcon.reader.entity.novelItem.NovelItem;
 import com.falcon.reader.entity.NovelRecord;
+import com.falcon.reader.entity.novelItem.NovelItem;
+import com.falcon.reader.entity.novelItem.NovelItemRenderer;
 import com.falcon.reader.model.ReadingRecord;
 import com.falcon.reader.util.EncodingDetect;
-import com.falcon.reader.entity.novelItem.NovelItemRenderer;
+import com.falcon.reader.util.NumericDocumentFilter;
 import javafx.util.Pair;
 
 import javax.swing.*;
@@ -15,9 +16,6 @@ import javax.swing.border.LineBorder;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.plaf.basic.BasicScrollBarUI;
 import javax.swing.text.AbstractDocument;
-import javax.swing.text.AttributeSet;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.DocumentFilter;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
@@ -57,7 +55,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         frame.addMouseListener(this);//窗口添加鼠标监听器
         frame.addMouseMotionListener(this);//窗口添加鼠标姿势动作监听器
         frame.addMouseWheelListener(this);
-        frame.setBackground(new Color(0, 0, 0, 20));
+        frame.setBackground(new Color(0, 0, 0, 1));
 
         frame.setLocation(800, 500);//设置窗口的显示位置
         frame.setLayout(null);
@@ -69,6 +67,11 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         frame.setVisible(true);
     }
 
+    /**
+     * 打开主页
+     * @author zxy
+     * @date 2024/10/21
+     */
     private void openHome(){
         novelRecordMap = ReadingRecord.loadRecord(frame);
         addOpenButton();
@@ -76,23 +79,11 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         addNovelScrollList();
     }
 
-    private void addCloseButton() {
-        closeButton = new JButton("×");
-        closeButton.setBounds(frame.getSize().width - 35, 10, 25, 25);
-        // 设置按钮背景色
-        closeButton.setForeground(Color.WHITE);
-        closeButton.setFont(new Font("Serif", Font.PLAIN, 18));
-        closeButton.setContentAreaFilled(false); // 移除内容区域填充
-        closeButton.setOpaque(false); // 设为不透明
-        // 设置白色边框
-        closeButton.setBorder(new LineBorder(Color.GRAY, 1));
-        // 设置光标为手型
-        closeButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        closeButton.addActionListener(e -> System.exit(1));
-
-        frame.add(closeButton);
-    }
-
+    /**
+     * 添加打开按钮
+     * @author zxy
+     * @date 2024/10/21
+     */
     private void addOpenButton(){
         openButton = new JButton("打开新文件");
         openButton.setBounds(6, 10, 80, 35);
@@ -125,6 +116,33 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         frame.add(openButton);
     }
 
+    /**
+     * 添加关闭按钮
+     * @author zxy
+     * @date 2024/10/21
+     */
+    private void addCloseButton() {
+        closeButton = new JButton("×");
+        closeButton.setBounds(frame.getSize().width - 35, 10, 25, 25);
+        // 设置按钮背景色
+        closeButton.setForeground(Color.WHITE);
+        closeButton.setFont(new Font("Serif", Font.PLAIN, 18));
+        closeButton.setContentAreaFilled(false); // 移除内容区域填充
+        closeButton.setOpaque(false); // 设为不透明
+        // 设置白色边框
+        closeButton.setBorder(new LineBorder(Color.GRAY, 1));
+        // 设置光标为手型
+        closeButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        closeButton.addActionListener(e -> System.exit(1));
+
+        frame.add(closeButton);
+    }
+
+    /**
+     * 添加滚动列表
+     * @author zxy
+     * @date 2024/10/21
+     */
     private void addNovelScrollList(){
         List<String> novelList = new ArrayList<>();
         if(CollectionUtil.isNotEmpty(novelRecordMap)) {
@@ -215,6 +233,11 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         frame.add(scrollPane);
     }
 
+    /**
+     * 打开小说
+     * @author zxy
+     * @date 2024/10/21
+     */
     private void openNovel() {
         if (StrUtil.isNotBlank(filePath)) {
             frame.remove(openButton);
@@ -241,6 +264,14 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         }
     }
 
+    /**
+     * 设置滚动条样式和透明
+     * @param scrollBar
+     * @param width
+     * @param height
+     * @author zxy
+     * @date 2024/10/21
+     */
     private void setScrollbarTransparency(JScrollBar scrollBar, int width, int height){
         scrollBar.setOpaque(false);
         scrollBar.setBackground(new Color(0, 0, 0, 0)); // 设置滚动条透明背景
@@ -290,88 +321,11 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         });
     }
 
-    public static void main(String[] args) {
-        new NovelReader();
-    }
-
-    @Override
-    public void mousePressed(MouseEvent e) {
-        //鼠标点击的时候，把当前屏幕上x，y的值给全局变量x，y
-        x = e.getX();
-        y = e.getY();
-    }
-
-    @Override
-    public void mouseDragged(MouseEvent e) {
-        //设置jframe位置为当前鼠标按住拖动的位置减去最开始鼠标在jframe按下的位置
-        frame.setLocation(e.getXOnScreen() - x, e.getYOnScreen() - y);
-    }
-
-    @Override
-    public void mouseMoved(MouseEvent e) {
-    }
-
-    @Override
-    public void mouseClicked(MouseEvent e) {
-        if(Arrays.asList(frame.getContentPane().getComponents()).contains(label)) {
-            if (e.getButton() == MouseEvent.BUTTON3) {
-                ReadingRecord.saveRecord(frame, label, filePath, currentPage);
-                frame.remove(label);
-                novelRecordMap = ReadingRecord.loadRecord(frame);
-                openHome();
-                frame.revalidate(); // 更新界面
-                frame.repaint();
-
-            } else if (e.getButton() == MouseEvent.BUTTON1) {
-                showSetting();
-                if (width != null && height != null) {
-                    frame.setSize(width, height);
-                    label.setBounds(0, 0, frame.getSize().width, frame.getSize().height);
-                }
-                if (fontSize != null && fontStyle != null) {
-                    label.setFont(new Font("Serif", fontStyle, fontSize));
-                }
-                if (selectedColor != null) {
-                    label.setForeground(new Color(selectedColor.getRGB()));
-                }
-                calculationPages();
-                showPage();
-            }
-        }
-    }
-
-    @Override
-    public void mouseReleased(MouseEvent e) {
-    }
-
-    @Override
-    public void mouseEntered(MouseEvent e) {
-    }
-
-    @Override
-    public void mouseExited(MouseEvent e) {
-    }
-
-    @Override
-    public void mouseWheelMoved(MouseWheelEvent e) {
-        // 获取鼠标滚轮的旋转方向
-        int rotation = e.getWheelRotation();
-        if (rotation < 0) {
-            // 鼠标滚轮向前（远离用户），向前翻页
-            --currentPage;
-        } else if (rotation > 0) {
-            // 鼠标滚轮向后（朝向用户），向后翻页
-            ++currentPage;
-        }
-        if (currentPage < 0) {
-            currentPage = 0;
-        } else if (currentPage >= pages.size()) {
-            currentPage = pages.size() - 1;
-        }
-        showPage();
-    }
-
-
+    /**
+     * 计算页内容
+     * @author zxy
+     * @date 2024/10/21
+     */
     private void calculationPages(){
         pages.clear();
         try {
@@ -418,12 +372,22 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         }
     }
 
+    /**
+     * 展示页内容
+     * @author zxy
+     * @date 2024/10/21
+     */
     private void showPage() {
         if (currentPage >= 0 && currentPage < pages.size()) {
             label.setText(pages.get(currentPage));
         }
     }
 
+    /**
+     * 展示设置弹出框
+     * @author zxy
+     * @date 2024/10/21
+     */
     public void showSetting() {
         JButton colorButton = new JButton("选择颜色");
 
@@ -525,21 +489,84 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         dialog.setVisible(true);
     }
 
-    class NumericDocumentFilter extends DocumentFilter {
-        @Override
-        public void replace(FilterBypass fb, int offset, int length, String text, AttributeSet attrs) throws
-                BadLocationException {
-            if (text == null) {
-                return;
-            }
+    @Override
+    public void mousePressed(MouseEvent e) {
+        //鼠标点击的时候，把当前屏幕上x，y的值给全局变量x，y
+        x = e.getX();
+        y = e.getY();
+    }
 
-            StringBuilder sb = new StringBuilder();
-            for (char c : text.toCharArray()) {
-                if (Character.isDigit(c)) {
-                    sb.append(c);
+    @Override
+    public void mouseDragged(MouseEvent e) {
+        //设置jframe位置为当前鼠标按住拖动的位置减去最开始鼠标在jframe按下的位置
+        frame.setLocation(e.getXOnScreen() - x, e.getYOnScreen() - y);
+    }
+
+    @Override
+    public void mouseMoved(MouseEvent e) {
+    }
+
+    @Override
+    public void mouseClicked(MouseEvent e) {
+        if(Arrays.asList(frame.getContentPane().getComponents()).contains(label)) {
+            if (e.getButton() == MouseEvent.BUTTON3) {
+                ReadingRecord.saveRecord(frame, label, filePath, currentPage);
+                frame.remove(label);
+                novelRecordMap = ReadingRecord.loadRecord(frame);
+                openHome();
+                frame.revalidate(); // 更新界面
+                frame.repaint();
+
+            } else if (e.getButton() == MouseEvent.BUTTON1) {
+                showSetting();
+                if (width != null && height != null) {
+                    frame.setSize(width, height);
+                    label.setBounds(0, 0, frame.getSize().width, frame.getSize().height);
                 }
+                if (fontSize != null && fontStyle != null) {
+                    label.setFont(new Font("Serif", fontStyle, fontSize));
+                }
+                if (selectedColor != null) {
+                    label.setForeground(new Color(selectedColor.getRGB()));
+                }
+                calculationPages();
+                showPage();
             }
-            super.replace(fb, offset, length, sb.toString(), attrs);
         }
+    }
+
+    @Override
+    public void mouseReleased(MouseEvent e) {
+    }
+
+    @Override
+    public void mouseEntered(MouseEvent e) {
+    }
+
+    @Override
+    public void mouseExited(MouseEvent e) {
+    }
+
+    @Override
+    public void mouseWheelMoved(MouseWheelEvent e) {
+        // 获取鼠标滚轮的旋转方向
+        int rotation = e.getWheelRotation();
+        if (rotation < 0) {
+            // 鼠标滚轮向前（远离用户），向前翻页
+            --currentPage;
+        } else if (rotation > 0) {
+            // 鼠标滚轮向后（朝向用户），向后翻页
+            ++currentPage;
+        }
+        if (currentPage < 0) {
+            currentPage = 0;
+        } else if (currentPage >= pages.size()) {
+            currentPage = pages.size() - 1;
+        }
+        showPage();
+    }
+
+    public static void main(String[] args) {
+        new NovelReader();
     }
 }

@@ -5,7 +5,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 小说信息
+ * 小说记录
  *
  * @author zxy
  * @date 2024/10/18 16:05

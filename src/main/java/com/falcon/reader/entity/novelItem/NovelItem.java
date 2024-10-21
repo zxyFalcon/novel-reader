@@ -3,7 +3,7 @@ package com.falcon.reader.entity.novelItem;
 import lombok.Data;
 
 /**
- * 小说记录
+ * 小说项
  *
  * @author zxy
  * @date 2024/10/18 16:05

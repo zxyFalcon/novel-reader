@@ -4,6 +4,11 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 
+/**
+ * 项列表配置
+ * @author zxy
+ * @date 2024/10/21
+ */
 public class NovelItemRenderer extends DefaultListCellRenderer {
     @Override
     public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected,
