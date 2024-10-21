@@ -1,12 +1,12 @@
 package com.falcon.reader;
 
-import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONArray;
-import cn.hutool.json.JSONObject;
-import com.falcon.reader.entity.NovelInfo;
+import com.falcon.reader.entity.novelItem.NovelItem;
+import com.falcon.reader.entity.NovelRecord;
+import com.falcon.reader.model.ReadingRecord;
 import com.falcon.reader.util.EncodingDetect;
+import com.falcon.reader.entity.novelItem.NovelItemRenderer;
 import javafx.util.Pair;
 
 import javax.swing.*;
@@ -21,10 +21,6 @@ import javax.swing.text.DocumentFilter;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.*;
 
@@ -35,16 +31,17 @@ import java.util.*;
 public class NovelReader implements MouseListener, MouseMotionListener, MouseWheelListener {
     int x, y;
     Integer fontSize, fontStyle, width, height;
-    private String fileName = null;
+    private String filePath = null;
     private Color selectedColor = null;
     private JFrame frame;
     private JButton openButton;
+    private JButton closeButton;
     private JScrollPane scrollPane;
     private JLabel label;
     private int currentPage = 0;
-    private Map<String, NovelInfo> novelInfoMap = new LinkedHashMap<>();
+    private Map<String, NovelRecord> novelRecordMap = new LinkedHashMap<>();
     private List<String> pages = new ArrayList<>();
-    private static final String BOOKMARK_FILE = "bookmark.json";
+
 
     NovelReader() {
         try {
@@ -72,36 +69,28 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         frame.setVisible(true);
     }
 
-    private void openNovel() {
-        if (StrUtil.isNotBlank(fileName)) {
-            frame.remove(openButton);
-            frame.remove(scrollPane);
-            frame.revalidate(); // 更新界面
-            frame.repaint();
-
-            if(novelInfoMap.containsKey(fileName)) {
-                currentPage = novelInfoMap.get(fileName).getCurrentPage();
-            }
-
-            label = new JLabel();
-            label.setLayout(new FlowLayout());
-            label.setBounds(0, 0, frame.getSize().width, frame.getSize().height);
-            label.setFont(new Font("Serif", Font.PLAIN, 15));
-            label.setForeground(Color.WHITE);
-            label.setVerticalAlignment(JLabel.TOP); // 或者 JLabel.CENTER, JLabel.BOTTOM
-            label.setVerticalTextPosition(JLabel.TOP); // 或者 JLabel.CENTER, JLabel.BOTTOM
-            frame.add(label);
-
-
-            calculationPages();
-            showPage(currentPage);
-        }
+    private void openHome(){
+        novelRecordMap = ReadingRecord.loadRecord(frame);
+        addOpenButton();
+        addCloseButton();
+        addNovelScrollList();
     }
 
-    private void openHome(){
-        loadContent();
-        addOpenButton();
-        addNovelScrollList();
+    private void addCloseButton() {
+        closeButton = new JButton("×");
+        closeButton.setBounds(frame.getSize().width - 35, 10, 25, 25);
+        // 设置按钮背景色
+        closeButton.setForeground(Color.WHITE);
+        closeButton.setFont(new Font("Serif", Font.PLAIN, 18));
+        closeButton.setContentAreaFilled(false); // 移除内容区域填充
+        closeButton.setOpaque(false); // 设为不透明
+        // 设置白色边框
+        closeButton.setBorder(new LineBorder(Color.GRAY, 1));
+        // 设置光标为手型
+        closeButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        closeButton.addActionListener(e -> System.exit(1));
+
+        frame.add(closeButton);
     }
 
     private void addOpenButton(){
@@ -109,14 +98,15 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         openButton.setBounds(6, 10, 80, 35);
         openButton.setForeground(Color.WHITE); // 设置按钮背景色
         openButton.setFont(new Font("Serif", Font.PLAIN, 13));
-        openButton.setContentAreaFilled(false); // 移除内容区域填充
-        openButton.setOpaque(false); // 设为不透明
-        openButton.setBorder(new LineBorder(Color.GRAY, 1)); // 设置白色边框
-        openButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)); // 设置光标为手型
+        openButton.setContentAreaFilled(false);// 移除内容区域填充
+        openButton.setOpaque(false);// 设为不透明
+        openButton.setBorder(new LineBorder(Color.GRAY, 1));// 设置灰色边框
+        openButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));// 设置光标为手型
         openButton.addActionListener(e -> {
             // 创建一个文件选择器
             JFileChooser fileChooser = new JFileChooser();
-            fileChooser.setCurrentDirectory(new File(".")); // 设置当前目录为当前目录
+            // 设置文件选择器默认目录为当前目录
+            fileChooser.setCurrentDirectory(new File("."));
             // 设置文件过滤器，只允许选择txt文件
             FileNameExtensionFilter txtFilter = new FileNameExtensionFilter("文本文件 (*.txt)", "txt");
             fileChooser.setFileFilter(txtFilter);
@@ -127,10 +117,8 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
             // 检查用户是否点击了打开按钮
             if (result == JFileChooser.APPROVE_OPTION) {
                 File selectedFile = fileChooser.getSelectedFile();
-                fileName = selectedFile.getAbsolutePath();
+                filePath = selectedFile.getAbsolutePath();
                 openNovel();
-            } else {
-                System.exit(1);
             }
         });
 
@@ -139,47 +127,69 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
 
     private void addNovelScrollList(){
         List<String> novelList = new ArrayList<>();
-        if(CollectionUtil.isNotEmpty(novelInfoMap)) {
-            novelList = new ArrayList<>(novelInfoMap.keySet());
+        if(CollectionUtil.isNotEmpty(novelRecordMap)) {
+            novelList = new ArrayList<>(novelRecordMap.keySet());
         }
-        DefaultListModel<String> listModel = new DefaultListModel<>();
+        DefaultListModel<NovelItem> listModel = new DefaultListModel<>();
         for (String item : novelList) {
-            listModel.addElement(item);
+            listModel.addElement(new NovelItem(item));
         }
-        JList<String> list = new JList<>(listModel);
+        JList<NovelItem> list = new JList<>(listModel);
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        list.setFont(new Font("Serif", Font.PLAIN, 15));
+        NovelItemRenderer renderer = new NovelItemRenderer();
+        list.setCellRenderer(renderer);
+        list.setFont(new Font("Serif", Font.PLAIN, 16));
         list.setBackground(new Color(0, 0, 0, 0)); // 设置透明背景
         list.setForeground(Color.WHITE);
 
         // 根据文本设置项的宽度
-        FontMetrics metrics = list.getFontMetrics(list.getFont());
         int maxWidth = 0;
+        int maxHeight = 0;
         for (int i = 0; i < listModel.size(); i++) {
-            int width = metrics.stringWidth(listModel.getElementAt(i));
-            if (width > maxWidth) {
-                maxWidth = width;
+            Dimension size = renderer.getPreferredSizeForItem(listModel.get(i));
+            if (size.width > maxWidth) {
+                maxWidth = size.width;
+            }
+            if (size.height > maxHeight) {
+                maxHeight = size.height;
             }
         }
 
-        list.setFixedCellHeight(30); // 设置每个项的高度
-        list.setFixedCellWidth(maxWidth);  // 设置每个项的宽度
+        // 设置每个项的高度
+        list.setFixedCellHeight(maxHeight + 5);
+        // 设置每个项的宽度
+        list.setFixedCellWidth(maxWidth);
         list.setPreferredSize(new Dimension(maxWidth, list.getPreferredSize().height));
-        list.setOpaque(false); // 设为不透明
+        // 设为不透明
+        list.setOpaque(false);
 
         list.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (e.getButton() == MouseEvent.BUTTON1) {
-                    int index = list.locationToIndex(e.getPoint());
-                    list.setSelectedIndex(index);
-                    fileName = list.getModel().getElementAt(index);
-                    openNovel();
-                } else if (e.getButton() == MouseEvent.BUTTON3) {
-                    int index = list.locationToIndex(e.getPoint());
-                    if (index != -1) {
-                        listModel.remove(index); // 移除选中的项
-                        // todo 删除文件中的该项
+                int index = list.locationToIndex(e.getPoint());
+                Rectangle bounds = list.getCellBounds(index, index);
+                if (bounds.contains(e.getPoint())) {
+                    if (e.getButton() == MouseEvent.BUTTON1) {
+                        list.setSelectedIndex(index);
+                        filePath =
+                                list.getModel().getElementAt(index).getFilePath() + list.getModel().getElementAt(index).getFileName();
+                        openNovel();
+                    } else if (e.getButton() == MouseEvent.BUTTON3) {
+                        list.setSelectedIndex(index);
+                        int confirm = JOptionPane.showConfirmDialog(frame, "是否删除“" + list.getModel().getElementAt(index).getFileName() + "”？",
+                                "删除记录", JOptionPane.YES_NO_OPTION);
+
+                        if (confirm == JOptionPane.YES_OPTION) {
+                            // 执行删除操作
+                            if (index != -1) {
+                                filePath = list.getModel().getElementAt(index).getFilePath() + list.getModel().getElementAt(index).getFileName();
+                                // 移除选中的项
+                                listModel.remove(index);
+                                novelRecordMap.remove(filePath);
+                                // 删除文件中的该项
+                                ReadingRecord.deleteRecord(frame, filePath);
+                            }
+                        }
                     }
                 }
             }
@@ -188,7 +198,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         // 将列表放入滚动面板
         scrollPane = new JScrollPane(list);
         scrollPane.setPreferredSize(new Dimension(220, list.getPreferredSize().height + 20));
-        scrollPane.setBounds(10, 50, frame.getSize().width - 20, frame.getSize().height - 60);
+        scrollPane.setBounds(0, 50, frame.getSize().width - 10, frame.getSize().height - 60);
         scrollPane.setPreferredSize(new Dimension(10, 20));
         scrollPane.setOpaque(false); // 设为不透明
         scrollPane.getViewport().setOpaque(false); // 设为透明
@@ -203,6 +213,32 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         setScrollbarTransparency(horizontalScrollBar, horizontalScrollBar.getWidth(), 4);
 
         frame.add(scrollPane);
+    }
+
+    private void openNovel() {
+        if (StrUtil.isNotBlank(filePath)) {
+            frame.remove(openButton);
+            frame.remove(closeButton);
+            frame.remove(scrollPane);
+            frame.revalidate(); // 更新界面
+            frame.repaint();
+
+            if(novelRecordMap.containsKey(filePath)) {
+                currentPage = novelRecordMap.get(filePath).getCurrentPage();
+            }
+
+            label = new JLabel();
+            label.setLayout(new FlowLayout());
+            label.setBounds(0, 0, frame.getSize().width, frame.getSize().height);
+            label.setFont(new Font("Serif", Font.PLAIN, 15));
+            label.setForeground(Color.WHITE);
+            label.setVerticalAlignment(JLabel.TOP); // 或者 JLabel.CENTER, JLabel.BOTTOM
+            label.setVerticalTextPosition(JLabel.TOP); // 或者 JLabel.CENTER, JLabel.BOTTOM
+            frame.add(label);
+
+            calculationPages();
+            showPage();
+        }
     }
 
     private void setScrollbarTransparency(JScrollBar scrollBar, int width, int height){
@@ -277,23 +313,30 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
 
     @Override
     public void mouseClicked(MouseEvent e) {
-        if(e.getButton() == MouseEvent.BUTTON3){
-            saveContent();
-            System.exit(1);
-        } else if(e.getButton() == MouseEvent.BUTTON1){
-            showDialog();
-            if (width != null && height != null) {
-                frame.setSize(width, height);
-                label.setBounds(0, 0, frame.getSize().width, frame.getSize().height);
+        if(Arrays.asList(frame.getContentPane().getComponents()).contains(label)) {
+            if (e.getButton() == MouseEvent.BUTTON3) {
+                ReadingRecord.saveRecord(frame, label, filePath, currentPage);
+                frame.remove(label);
+                novelRecordMap = ReadingRecord.loadRecord(frame);
+                openHome();
+                frame.revalidate(); // 更新界面
+                frame.repaint();
+
+            } else if (e.getButton() == MouseEvent.BUTTON1) {
+                showSetting();
+                if (width != null && height != null) {
+                    frame.setSize(width, height);
+                    label.setBounds(0, 0, frame.getSize().width, frame.getSize().height);
+                }
+                if (fontSize != null && fontStyle != null) {
+                    label.setFont(new Font("Serif", fontStyle, fontSize));
+                }
+                if (selectedColor != null) {
+                    label.setForeground(new Color(selectedColor.getRGB()));
+                }
+                calculationPages();
+                showPage();
             }
-            if(fontSize != null && fontStyle != null){
-                label.setFont(new Font("Serif", fontStyle, fontSize));
-            }
-            if(selectedColor != null){
-                label.setForeground(new Color(selectedColor.getRGB()));
-            }
-            calculationPages();
-            showPage(currentPage);
         }
     }
 
@@ -325,15 +368,15 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         } else if (currentPage >= pages.size()) {
             currentPage = pages.size() - 1;
         }
-        showPage(currentPage);
+        showPage();
     }
 
 
     private void calculationPages(){
         pages.clear();
         try {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(fileName),
-                    EncodingDetect.getJavaEncode(fileName)));
+            BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(filePath),
+                    EncodingDetect.getJavaEncode(filePath)));
             String line = reader.readLine();
             StringBuilder text = new StringBuilder();
 
@@ -375,13 +418,13 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         }
     }
 
-    private void showPage(int page) {
-        if (page >= 0 && page < pages.size()) {
-            label.setText(pages.get(page));
+    private void showPage() {
+        if (currentPage >= 0 && currentPage < pages.size()) {
+            label.setText(pages.get(currentPage));
         }
     }
 
-    public void showDialog() {
+    public void showSetting() {
         JButton colorButton = new JButton("选择颜色");
 
         // 添加按钮的点击事件监听器
@@ -496,103 +539,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
                     sb.append(c);
                 }
             }
-
             super.replace(fb, offset, length, sb.toString(), attrs);
-        }
-    }
-
-    private void saveContent() {
-        Path path = Paths.get(BOOKMARK_FILE);
-
-        if(StrUtil.isNotBlank(fileName)) {
-            JSONObject jsonObject = null;
-            if (!Files.exists(path)) {
-                try {
-                    Files.createFile(path);
-                    jsonObject = new JSONObject();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    return;
-                }
-            } else {
-                try {
-                    jsonObject = new JSONObject(new FileReader(BOOKMARK_FILE));
-                } catch (FileNotFoundException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-
-            JSONArray novelArray = new JSONArray();
-            boolean flag = true;
-            if(jsonObject.containsKey("novels")){
-                novelArray = jsonObject.getJSONArray("novels");
-                if(!novelArray.isEmpty()){
-                    for (Object object : novelArray) {
-                        JSONObject novel = (JSONObject)object;
-                        if(novel.containsKey("fileName") && fileName.equals(novel.getStr("fileName"))){
-                            novel.set("currentPage", currentPage);
-                            novel.set("lastReadingTime", LocalDateTime.now());
-                            flag = false;
-                            break;
-                        }
-                    }
-                }
-            }
-            if(flag) {
-                JSONObject currentNovel = new JSONObject();
-                currentNovel.set("fileName", fileName);
-                currentNovel.set("currentPage", currentPage);
-                currentNovel.set("lastReadingTime", LocalDateTime.now());
-                novelArray.add(currentNovel);
-            }
-
-            jsonObject.set("width", frame.getSize().width);
-            jsonObject.set("height", frame.getSize().height);
-            jsonObject.set("fontSize", label.getFont().getSize());
-            jsonObject.set("fontStyle", label.getFont().getStyle());
-            jsonObject.set("labelForeground", label.getForeground().getRGB());
-            jsonObject.set("locationX", frame.getLocation().x);
-            jsonObject.set("locationY", frame.getLocation().y);
-            jsonObject.set("novels", novelArray);
-            try (FileWriter file = new FileWriter(BOOKMARK_FILE)) {
-                file.write(jsonObject.toString());
-            } catch (IOException ex) {
-                ex.printStackTrace();
-                JOptionPane.showMessageDialog(frame, "保存内容失败: " + ex.getMessage());
-            }
-        }
-    }
-
-    private void loadContent() {
-        if(Files.exists(Paths.get(BOOKMARK_FILE))) {
-            try {
-                JSONObject jsonObject = new JSONObject(new FileReader(BOOKMARK_FILE));
-                if (jsonObject.containsKey("width") && jsonObject.containsKey("height")) {
-                    frame.setSize(jsonObject.getInt("width"), jsonObject.getInt("height"));
-                }
-                if(jsonObject.containsKey("locationX") && jsonObject.containsKey("locationY")){
-                    frame.setLocation(jsonObject.getInt("locationX"), jsonObject.getInt("locationY"));
-                }
-
-                if(jsonObject.containsKey("novels")){
-                    JSONArray novelArray = jsonObject.getJSONArray("novels");
-                    if(!novelArray.isEmpty()){
-                        List<NovelInfo> novelInfos = new ArrayList<>();
-                        for (Object object : novelArray) {
-                            JSONObject novel = (JSONObject)object;
-                            novelInfos.add(BeanUtil.toBean(novel, NovelInfo.class));
-                        }
-                        novelInfos.sort(Comparator.comparing(NovelInfo::getLastReadingTime).reversed());
-                        for (NovelInfo novelInfo : novelInfos) {
-                            novelInfoMap.put(novelInfo.getFileName(), novelInfo);
-                        }
-                    }
-                }
-
-            } catch (IOException | NullPointerException ex) {
-                ex.printStackTrace();
-                JOptionPane.showMessageDialog(frame, "加载内容失败: " + ex.getMessage());
-            }
         }
     }
 }

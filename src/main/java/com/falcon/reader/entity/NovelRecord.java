@@ -11,8 +11,8 @@ import java.time.LocalDateTime;
  * @date 2024/10/18 16:05
  **/
 @Data
-public class NovelInfo {
-    private String fileName;
+public class NovelRecord {
+    private String filePath;
     private Integer currentPage;
     private LocalDateTime lastReadingTime;
 }
