@@ -2,6 +2,7 @@ package com.falcon.reader;
 
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.StrUtil;
+import com.falcon.reader.entity.NovelConfig;
 import com.falcon.reader.entity.NovelRecord;
 import com.falcon.reader.entity.novelItem.NovelItem;
 import com.falcon.reader.entity.novelItem.NovelItemRenderer;
@@ -37,7 +38,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
     private JScrollPane scrollPane;
     private JLabel label;
     private int currentPage = 0;
-    private Map<String, NovelRecord> novelRecordMap = new LinkedHashMap<>();
+    private Pair<NovelConfig, Map<String, NovelRecord>> novelConfigAndRecordPair;
     private List<String> pages = new ArrayList<>();
 
 
@@ -73,7 +74,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
      * @date 2024/10/21
      */
     private void openHome(){
-        novelRecordMap = ReadingRecord.loadRecord(frame);
+        novelConfigAndRecordPair = ReadingRecord.loadRecord(frame);
         addOpenButton();
         addCloseButton();
         addNovelScrollList();
@@ -145,8 +146,8 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
      */
     private void addNovelScrollList(){
         List<String> novelList = new ArrayList<>();
-        if(CollectionUtil.isNotEmpty(novelRecordMap)) {
-            novelList = new ArrayList<>(novelRecordMap.keySet());
+        if(CollectionUtil.isNotEmpty(novelConfigAndRecordPair.getValue())) {
+            novelList = new ArrayList<>(novelConfigAndRecordPair.getValue().keySet());
         }
         DefaultListModel<NovelItem> listModel = new DefaultListModel<>();
         for (String item : novelList) {
@@ -203,7 +204,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
                                 filePath = list.getModel().getElementAt(index).getFilePath() + list.getModel().getElementAt(index).getFileName();
                                 // 移除选中的项
                                 listModel.remove(index);
-                                novelRecordMap.remove(filePath);
+                                novelConfigAndRecordPair.getValue().remove(filePath);
                                 // 删除文件中的该项
                                 ReadingRecord.deleteRecord(frame, filePath);
                             }
@@ -246,15 +247,15 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
             frame.revalidate(); // 更新界面
             frame.repaint();
 
-            if(novelRecordMap.containsKey(filePath)) {
-                currentPage = novelRecordMap.get(filePath).getCurrentPage();
+            if(novelConfigAndRecordPair.getValue().containsKey(filePath)) {
+                currentPage = novelConfigAndRecordPair.getValue().get(filePath).getCurrentPage();
             }
 
             label = new JLabel();
             label.setLayout(new FlowLayout());
             label.setBounds(0, 0, frame.getSize().width, frame.getSize().height);
-            label.setFont(new Font("Serif", Font.PLAIN, 15));
-            label.setForeground(Color.WHITE);
+            label.setFont(novelConfigAndRecordPair.getKey().getFont());
+            label.setForeground(novelConfigAndRecordPair.getKey().getForeground());
             label.setVerticalAlignment(JLabel.TOP); // 或者 JLabel.CENTER, JLabel.BOTTOM
             label.setVerticalTextPosition(JLabel.TOP); // 或者 JLabel.CENTER, JLabel.BOTTOM
             frame.add(label);
@@ -512,7 +513,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
             if (e.getButton() == MouseEvent.BUTTON3) {
                 ReadingRecord.saveRecord(frame, label, filePath, currentPage);
                 frame.remove(label);
-                novelRecordMap = ReadingRecord.loadRecord(frame);
+                novelConfigAndRecordPair = ReadingRecord.loadRecord(frame);
                 openHome();
                 frame.revalidate(); // 更新界面
                 frame.repaint();
