@@ -4,9 +4,12 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
+import com.falcon.reader.entity.NovelConfig;
 import com.falcon.reader.entity.NovelRecord;
+import javafx.util.Pair;
 
 import javax.swing.*;
+import java.awt.*;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -16,6 +19,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.List;
 
 /**
  * 阅读记录处理
@@ -133,8 +137,9 @@ public class ReadingRecord {
         }
     }
 
-    public static Map<String, NovelRecord> loadRecord(JFrame frame) {
+    public static Pair<NovelConfig, Map<String, NovelRecord>> loadRecord(JFrame frame) {
         Map<String, NovelRecord> novelRecordMap = new LinkedHashMap<>();
+        NovelConfig novelConfig = new NovelConfig();
         if(Files.exists(Paths.get(BOOKMARK_FILE))) {
             try {
                 JSONObject jsonObject = new JSONObject(new FileReader(BOOKMARK_FILE));
@@ -144,7 +149,12 @@ public class ReadingRecord {
                 if(jsonObject.containsKey("locationX") && jsonObject.containsKey("locationY")){
                     frame.setLocation(jsonObject.getInt("locationX"), jsonObject.getInt("locationY"));
                 }
-
+                if (jsonObject.containsKey("fontSize") && jsonObject.containsKey("fontStyle")) {
+                    novelConfig.setFont(new Font("Serif", jsonObject.getInt("fontStyle"), jsonObject.getInt("fontSize")));
+                }
+                if (jsonObject.containsKey("labelForeground")) {
+                    novelConfig.setForeground(new Color(jsonObject.getInt("labelForeground")));
+                }
                 if(jsonObject.containsKey("novels")){
                     JSONArray novelArray = jsonObject.getJSONArray("novels");
                     if(!novelArray.isEmpty()){
@@ -159,12 +169,11 @@ public class ReadingRecord {
                         }
                     }
                 }
-
             } catch (IOException | NullPointerException ex) {
                 ex.printStackTrace();
                 JOptionPane.showMessageDialog(frame, "加载记录失败: " + ex.getMessage());
             }
         }
-        return novelRecordMap;
+        return new Pair<>(novelConfig,novelRecordMap);
     }
 }
