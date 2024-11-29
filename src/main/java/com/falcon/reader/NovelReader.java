@@ -249,6 +249,8 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
 
             if(novelConfigAndRecordPair.getValue().containsKey(filePath)) {
                 currentPage = novelConfigAndRecordPair.getValue().get(filePath).getCurrentPage();
+            } else{
+                currentPage = 0;
             }
 
             label = new JLabel();
