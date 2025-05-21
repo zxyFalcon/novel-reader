@@ -9,6 +9,7 @@ import com.falcon.reader.entity.novelItem.NovelItemRenderer;
 import com.falcon.reader.model.ReadingRecord;
 import com.falcon.reader.util.EncodingDetect;
 import com.falcon.reader.util.NumericDocumentFilter;
+import com.falcon.reader.util.SpringUtilities;
 import javafx.util.Pair;
 
 import javax.swing.*;
@@ -472,25 +473,36 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         JButton cancelButton = new JButton("取消");
 
         // 创建面板来放置组件
-        JPanel panel = new JPanel(new GridLayout(8, 2, 5, 5)); // 使用网格布局
-        panel.add(new JLabel(" 字体颜色:"));
+        JPanel panel = new JPanel(new SpringLayout()); // 使用网格布局
+        panel.add(new JLabel("字体颜色:"));
         panel.add(colorButton);
-        panel.add(new JLabel(" 字体大小:"));
+        panel.add(new JLabel("字体大小:"));
         panel.add(textFontSize);
-        panel.add(new JLabel(" 字体样式:"));
+        panel.add(new JLabel("字体样式:"));
         panel.add(fontStyleComboBox);
-        panel.add(new JLabel(" 字体:"));
+        panel.add(new JLabel("字体:"));
         panel.add(fontComboBox);
-        panel.add(new JLabel(" 窗口宽度:"));
+        panel.add(new JLabel("窗口宽度:"));
         panel.add(textWidth);
-        panel.add(new JLabel(" 窗口高度:"));
+        panel.add(new JLabel("窗口高度:"));
         panel.add(textHeight);
-        panel.add(new JLabel(" 跳页(0/" + (pages.size() - 1) + "):"));
+        panel.add(new JLabel("跳页(0/" + (pages.size() - 1) + "):"));
         panel.add(jumpPage);
 
-        panel.add(okButton);
-        panel.add(cancelButton);
-        panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        // 创建一个新的面板来容纳按钮
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
+        buttonPanel.add(okButton);
+        buttonPanel.add(cancelButton);
+
+        // 将按钮面板添加到主面板
+        panel.add(new JLabel()); // 空标签占位
+        panel.add(buttonPanel);
+
+        panel.setBorder(new EmptyBorder(10, 20, 10, 20));
+        SpringUtilities.makeCompactGrid(panel,
+                8, 2,  // rows, cols
+                5, 5,  // initialX, initialY
+                5, 5); // xPad, yPad
 
         // 创建对话框
         JDialog dialog = new JDialog(frame, "设置", Dialog.ModalityType.APPLICATION_MODAL);
