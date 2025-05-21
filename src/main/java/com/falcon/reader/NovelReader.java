@@ -195,7 +195,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
                         openNovel();
                     } else if (e.getButton() == MouseEvent.BUTTON3) {
                         list.setSelectedIndex(index);
-                        int confirm = JOptionPane.showConfirmDialog(frame, "是否删除“" + list.getModel().getElementAt(index).getFileName() + "”？",
+                        int confirm = JOptionPane.showConfirmDialog(frame, "是否删除 “" + list.getModel().getElementAt(index).getFileName() + "” ？",
                                 "删除记录", JOptionPane.YES_NO_OPTION);
 
                         if (confirm == JOptionPane.YES_OPTION) {
@@ -241,6 +241,16 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
      */
     private void openNovel() {
         if (StrUtil.isNotBlank(filePath)) {
+            File file = new File(filePath);
+            if (!file.exists() || !file.isFile()){
+                JOptionPane.showConfirmDialog(frame, "文件 “" + filePath + "” 不存在！",
+                        "文件不存在", JOptionPane.DEFAULT_OPTION);
+                return;
+            } else if (!file.getName().toLowerCase().endsWith(".txt")) {
+                JOptionPane.showConfirmDialog(frame, "文件 “" + filePath + "” 不是txt！",
+                        "文件格式错误", JOptionPane.DEFAULT_OPTION);
+                return;
+            }
             frame.remove(openButton);
             frame.remove(closeButton);
             frame.remove(scrollPane);
