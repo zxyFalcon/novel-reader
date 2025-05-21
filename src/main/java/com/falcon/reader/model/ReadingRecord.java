@@ -78,6 +78,7 @@ public class ReadingRecord {
 
             jsonObject.set("width", frame.getSize().width);
             jsonObject.set("height", frame.getSize().height);
+            jsonObject.set("font", label.getFont().getName());
             jsonObject.set("fontSize", label.getFont().getSize());
             jsonObject.set("fontStyle", label.getFont().getStyle());
             jsonObject.set("labelForeground", label.getForeground().getRGB());
@@ -140,24 +141,25 @@ public class ReadingRecord {
     public static Pair<NovelConfig, Map<String, NovelRecord>> loadRecord(JFrame frame) {
         Map<String, NovelRecord> novelRecordMap = new LinkedHashMap<>();
         NovelConfig novelConfig = new NovelConfig();
-        if(Files.exists(Paths.get(BOOKMARK_FILE))) {
+        if (Files.exists(Paths.get(BOOKMARK_FILE))) {
             try {
                 JSONObject jsonObject = new JSONObject(new FileReader(BOOKMARK_FILE));
                 if (jsonObject.containsKey("width") && jsonObject.containsKey("height")) {
                     frame.setSize(jsonObject.getInt("width"), jsonObject.getInt("height"));
                 }
-                if(jsonObject.containsKey("locationX") && jsonObject.containsKey("locationY")){
+                if (jsonObject.containsKey("locationX") && jsonObject.containsKey("locationY")) {
                     frame.setLocation(jsonObject.getInt("locationX"), jsonObject.getInt("locationY"));
                 }
-                if (jsonObject.containsKey("fontSize") && jsonObject.containsKey("fontStyle")) {
-                    novelConfig.setFont(new Font("Serif", jsonObject.getInt("fontStyle"), jsonObject.getInt("fontSize")));
+                if (jsonObject.containsKey("font") && jsonObject.containsKey("fontSize") && jsonObject.containsKey("fontStyle")) {
+                    novelConfig.setFont(
+                            new Font(jsonObject.getStr("font"), jsonObject.getInt("fontStyle"), jsonObject.getInt("fontSize")));
                 }
                 if (jsonObject.containsKey("labelForeground")) {
                     novelConfig.setForeground(new Color(jsonObject.getInt("labelForeground")));
                 }
-                if(jsonObject.containsKey("novels")){
+                if (jsonObject.containsKey("novels")) {
                     JSONArray novelArray = jsonObject.getJSONArray("novels");
-                    if(!novelArray.isEmpty()){
+                    if (!novelArray.isEmpty()) {
                         List<NovelRecord> novelRecords = new ArrayList<>();
                         for (Object object : novelArray) {
                             JSONObject novel = (JSONObject)object;
@@ -174,6 +176,6 @@ public class ReadingRecord {
                 JOptionPane.showMessageDialog(frame, "加载记录失败: " + ex.getMessage());
             }
         }
-        return new Pair<>(novelConfig,novelRecordMap);
+        return new Pair<>(novelConfig, novelRecordMap);
     }
 }

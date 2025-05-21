@@ -30,6 +30,7 @@ import java.util.*;
 public class NovelReader implements MouseListener, MouseMotionListener, MouseWheelListener {
     int x, y;
     Integer fontSize, fontStyle, width, height;
+    String font;
     private String filePath = null;
     private Color selectedColor = null;
     private JFrame frame;
@@ -435,17 +436,51 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
             fontStyle = ((Pair<String, Integer>) fontStyleComboBox.getSelectedItem()).getValue();
         });
 
+        JComboBox<Pair<String, String>> fontComboBox = new JComboBox<>();
+        fontComboBox.addItem(new Pair<>("Serif", "Serif"));
+        fontComboBox.addItem(new Pair<>("SansSerif", "SansSerif"));
+        fontComboBox.addItem(new Pair<>("Monospaced", "Monospaced"));
+        fontComboBox.addItem(new Pair<>("Dialog", "Dialog"));
+        fontComboBox.addItem(new Pair<>("DialogInput", "DialogInput"));
+        fontComboBox.addItem(new Pair<>("Arial", "Arial"));
+//        fontComboBox.addItem(new Pair<>("Times New Roman", "Times New Roman"));
+        fontComboBox.addItem(new Pair<>("Courier New", "Courier New"));
+        fontComboBox.addItem(new Pair<>("Verdana", "Verdana"));
+        fontComboBox.addItem(new Pair<>("宋体", "SimSun"));
+        fontComboBox.addItem(new Pair<>("微软雅黑", "Microsoft YaHei"));
+        fontComboBox.addItem(new Pair<>("黑体", "SimHei"));
+        fontComboBox.addItem(new Pair<>("楷体", "KaiTi"));
+        fontComboBox.addItem(new Pair<>("仿宋", "FangSong"));
+        fontComboBox.addItem(new Pair<>("隶书", "LiSu"));
+        fontComboBox.addItem(new Pair<>("等线", "DengXian"));
+        String currentFontName = label.getFont().getName(); // 获取字体名称
+
+        // 遍历 ComboBox 的项，找到匹配的字体
+        for (int i = 0; i < fontComboBox.getItemCount(); i++) {
+            Pair<String, String> item = fontComboBox.getItemAt(i);
+            if (item.getValue().equalsIgnoreCase(currentFontName)) {
+                fontComboBox.setSelectedIndex(i); // 找到匹配项，设置选中
+                break;
+            }
+        }
+        // 添加下拉框的动作监听器，以便在用户选择项时获取值
+        fontComboBox.addActionListener(e -> {
+            font = ((Pair<String, String>) fontComboBox.getSelectedItem()).getValue();
+        });
+
         JButton okButton = new JButton("确认");
         JButton cancelButton = new JButton("取消");
 
         // 创建面板来放置组件
-        JPanel panel = new JPanel(new GridLayout(7, 2, 5, 5)); // 使用网格布局
+        JPanel panel = new JPanel(new GridLayout(8, 2, 5, 5)); // 使用网格布局
         panel.add(new JLabel(" 字体颜色:"));
         panel.add(colorButton);
         panel.add(new JLabel(" 字体大小:"));
         panel.add(textFontSize);
         panel.add(new JLabel(" 字体样式:"));
         panel.add(fontStyleComboBox);
+        panel.add(new JLabel(" 字体:"));
+        panel.add(fontComboBox);
         panel.add(new JLabel(" 窗口宽度:"));
         panel.add(textWidth);
         panel.add(new JLabel(" 窗口高度:"));
@@ -487,6 +522,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
             } else {
                 fontSize = Integer.valueOf(textFontSize.getText());
                 fontStyle =  fontStyleComboBox.getSelectedIndex();
+                font = ((Pair<String, String>) fontComboBox.getSelectedItem()).getValue();
                 width = Integer.valueOf(textWidth.getText());
                 height = Integer.valueOf(textHeight.getText());
                 currentPage = Integer.valueOf(jumpPage.getText());
@@ -536,8 +572,8 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
                     frame.setSize(width, height);
                     label.setBounds(0, 0, frame.getSize().width, frame.getSize().height);
                 }
-                if (fontSize != null && fontStyle != null) {
-                    label.setFont(new Font("Serif", fontStyle, fontSize));
+                if (fontSize != null && fontStyle != null && font != null) {
+                    label.setFont(new Font(font, fontStyle, fontSize));
                 }
                 if (selectedColor != null) {
                     label.setForeground(new Color(selectedColor.getRGB()));
