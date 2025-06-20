@@ -357,7 +357,8 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
             // 计算每行最多能显示的中文字数
             int charsPerLine = label.getWidth() / charWidth;
             // 计算最多能显示的行数
-            int maxLines = label.getHeight() / charHeight;
+            int realLineHeight = (int)(charHeight * 1.2); // 根据经验调整
+            int maxLines = label.getHeight() / realLineHeight;
 
             while (line != null) {
                 text.append("<html>");
