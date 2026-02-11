@@ -15,6 +15,7 @@ import javafx.util.Pair;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
+import javax.swing.colorchooser.AbstractColorChooserPanel;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.plaf.basic.BasicScrollBarUI;
 import javax.swing.text.AbstractDocument;
@@ -341,11 +342,11 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
      * @author zxy
      * @date 2024/10/21
      */
-    private void calculationPages(){
+    private void calculationPages() {
         pages.clear();
         try {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(filePath),
-                    EncodingDetect.getJavaEncode(filePath)));
+            BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(new FileInputStream(filePath), EncodingDetect.getJavaEncode(filePath)));
             String line = reader.readLine();
             StringBuilder text = new StringBuilder();
 
@@ -363,22 +364,22 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
             while (line != null) {
                 text.append("<html>");
                 int i = 0;
-                do{
+                do {
                     int lineCount;
-                    if((line.length() % charsPerLine) != 0) {
+                    if ((line.length() % charsPerLine) != 0) {
                         lineCount = line.length() / charsPerLine + 1;
-                    } else{
+                    } else {
                         lineCount = line.length() / charsPerLine == 0 ? 1 : line.length() / charsPerLine;
                     }
                     i += lineCount;
-                    if (i > maxLines){
+                    if (i > maxLines) {
                         int endIndex = charsPerLine * (lineCount - (i - maxLines));
                         text.append(line, 0, endIndex).append("<br/>");
                         line = line.substring(endIndex);
                         break;
                     }
                     text.append(line).append("<br/>");
-                }while ((line = reader.readLine()) != null);
+                } while ((line = reader.readLine()) != null);
                 pages.add(text.append("</html>").toString());
                 text.delete(0, text.length());
             }
@@ -405,12 +406,24 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
      * @date 2024/10/21
      */
     public void showSetting() {
+        // 创建颜色选择器
+        JColorChooser colorChooser = new JColorChooser(label.getForeground());
+        // 只保留RGB色轮面板（兼容中英文 locale）
+        AbstractColorChooserPanel[] panels = colorChooser.getChooserPanels();
+        for (AbstractColorChooserPanel p : panels) {
+            String name = p.getDisplayName();
+            if (!name.equalsIgnoreCase("RGB")
+                    && !name.contains("RGB")) {
+                colorChooser.removeChooserPanel(p);
+            }
+        }
         JButton colorButton = new JButton("选择颜色");
-
-        // 添加按钮的点击事件监听器
         colorButton.addActionListener(e -> {
-            // 显示颜色选择器，并获取选择的颜色
-            selectedColor = JColorChooser.showDialog(frame, "选择颜色", label.getForeground());
+            // 使用 createDialog 创建自定义颜色对话框
+            JDialog colorDialog = JColorChooser.createDialog(frame, "选择颜色", true, colorChooser,
+                    ok -> selectedColor = colorChooser.getColor(),  // OK 监听器
+                    cancel -> {});  // Cancel 监听器
+            colorDialog.setVisible(true);
         });
 
         final JTextField textWidth = new JTextField(10);
