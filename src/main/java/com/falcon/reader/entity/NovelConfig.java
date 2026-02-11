@@ -12,6 +12,6 @@ import java.awt.*;
  **/
 @Data
 public class NovelConfig {
-    private Color foreground;
-    private Font font;
+    private Color foreground = Color.WHITE;  // 默认设置为白色，与菜单字体颜色一致
+    private Font font = new Font("Serif", Font.PLAIN, 16);  // 默认字体（可调整大小/样式）
 }
