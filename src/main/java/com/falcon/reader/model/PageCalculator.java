@@ -29,7 +29,7 @@ public class PageCalculator {
     public static List<String> calculatePages(String filePath, JLabel label) {
         List<String> pages = new ArrayList<>();
 
-        // 1. 字体度量与可用空间
+        // 字体度量与可用空间
         FontMetrics fm = label.getFontMetrics(label.getFont());
         // 精确行高（ascent+descent+leading+2 像素补偿，与原始算法一致）
         int lineHeight = fm.getAscent() + fm.getDescent() + fm.getLeading() + 2;
@@ -43,92 +43,88 @@ public class PageCalculator {
             return pages;
         }
 
-        // 2. 逐页生成
+        // 逐页生成
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(new FileInputStream(filePath),
                         EncodingDetect.getJavaEncode(filePath)))) {
 
-            StringBuilder pageContent = new StringBuilder();
-            int currentLines = 0;          // 当前页已用行数
+            List<String> currentPageLines = new ArrayList<>(maxLines + 2); // 预估容量
+            int currentLines = 0;
+
             String line;
-
-            pageContent.append("<html>");  // 每页以<html>开头
-
             while ((line = reader.readLine()) != null) {
-                // 处理空行：原算法会显示一个空白行，此处保持完全一致
                 if (line.isEmpty()) {
-                    // 当前页是否还有空间？
                     if (currentLines >= maxLines) {
-                        // 页满，封页并开启新页
-                        pageContent.append("</html>");
-                        pages.add(pageContent.toString());
-                        pageContent.setLength(0);
-                        pageContent.append("<html>");
+                        pages.add(buildPage(currentPageLines));
+                        currentPageLines.clear();
                         currentLines = 0;
                     }
-                    // 添加空行
-                    pageContent.append("<br/>");
+                    currentPageLines.add(""); // 空行用空字符串表示
                     currentLines++;
                     continue;
                 }
 
                 int index = 0;
-                int len = line.length();
-
-                // 将当前段落拆分为多行，每行宽度 ≤ availableWidth
-                while (index < len) {
-                    // 检查是否已到达本页底部
+                while (index < line.length()) {
                     if (currentLines >= maxLines) {
-                        // 当前页已满 → 封页，重置，继续处理当前行的剩余部分
-                        pageContent.append("</html>");
-                        pages.add(pageContent.toString());
-                        pageContent.setLength(0);
-                        pageContent.append("<html>");
+                        pages.add(buildPage(currentPageLines));
+                        currentPageLines.clear();
                         currentLines = 0;
                     }
 
-                    // 构建一行（贪婪累积字符直至超宽）
+                    // 找本行能放多少字符（逻辑不变）
                     int start = index;
                     int end = index;
                     int lineWidth = 0;
-
-                    while (end < len) {
+                    while (end < line.length()) {
                         char c = line.charAt(end);
                         int charWidth = fm.charWidth(c);
                         if (lineWidth + charWidth <= availableWidth) {
                             lineWidth += charWidth;
                             end++;
                         } else {
-                            break;  // 当前行已满
+                            break;
                         }
                     }
+                    if (start == end) end = start + 1;
 
-                    // 极端情况：单个字符宽度已超过可用宽度 → 强制显示该字符（宁可溢出，不可丢失）
-                    if (start == end) {
-                        end = start + 1;
-                    }
-
-                    // 将这一行子串添加到当前页，并附加<br/>
                     String subLine = line.substring(start, end);
-                    pageContent.append(subLine).append("<br/>");
+                    currentPageLines.add(subLine);
                     currentLines++;
 
-                    // 移动指针，处理剩余部分
                     index = end;
                 }
             }
 
-            // 3. 收尾：保存最后一页
-            if (pageContent.length() > "<html>".length()) {
-                pageContent.append("</html>");
-                pages.add(pageContent.toString());
+            // 最后一页
+            if (!currentPageLines.isEmpty()) {
+                pages.add(buildPage(currentPageLines));
             }
-
         } catch (IOException e) {
             e.printStackTrace();
             return new ArrayList<>();  // 异常时返回空列表
         }
 
         return pages;
+    }
+
+    // 格式化一页
+    private static String buildPage(List<String> lines) {
+        if (lines.isEmpty()) return "<html></html>";
+
+        StringBuilder sb = new StringBuilder(1024 + lines.size() * 40); // 粗略预估
+        sb.append("<html>");
+
+        for (int i = 0; i < lines.size(); i++) {
+            String content = lines.get(i);
+            if (content.isEmpty()) {
+                sb.append("<br/>");
+            } else {
+                sb.append(content).append("<br/>");
+            }
+        }
+
+        sb.append("</html>");
+        return sb.toString();
     }
 }
