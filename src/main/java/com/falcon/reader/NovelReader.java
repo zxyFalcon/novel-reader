@@ -1,56 +1,47 @@
 package com.falcon.reader;
 
-import cn.hutool.core.collection.CollectionUtil;
-import cn.hutool.core.util.StrUtil;
 import com.falcon.reader.entity.NovelConfig;
 import com.falcon.reader.entity.NovelRecord;
-import com.falcon.reader.entity.novelItem.NovelItem;
-import com.falcon.reader.entity.novelItem.NovelItemRenderer;
+import com.falcon.reader.model.HomeView;
+import com.falcon.reader.model.NovelView;
+import com.falcon.reader.model.PageCalculator;
 import com.falcon.reader.model.ReadingRecord;
-import com.falcon.reader.util.EncodingDetect;
-import com.falcon.reader.util.NumericDocumentFilter;
-import com.falcon.reader.util.SpringUtilities;
+import com.falcon.reader.model.SettingsDialog;
 import javafx.util.Pair;
 
 import javax.swing.*;
-import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
-import javax.swing.colorchooser.AbstractColorChooserPanel;
-import javax.swing.filechooser.FileNameExtensionFilter;
-import javax.swing.plaf.basic.BasicScrollBarUI;
-import javax.swing.text.AbstractDocument;
 import java.awt.*;
 import java.awt.event.*;
-import java.io.*;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.*;
+import java.util.Map;
 
 /**
+ * 主控制器类，处理窗口初始化和事件
+ *
  * @author zxy
- * @date 2024/10/17
+ * @date 2026/2/11 16:16
  */
 public class NovelReader implements MouseListener, MouseMotionListener, MouseWheelListener {
-    int x, y;
-    Integer fontSize, fontStyle, width, height;
-    String font;
-    private String filePath = null;
-    private Color selectedColor = null;
+    private int x, y;
     private JFrame frame;
-    private JButton openButton;
-    private JButton closeButton;
-    private JScrollPane scrollPane;
-    private JLabel label;
+    private String filePath;
     private int currentPage = 0;
-    private Pair<NovelConfig, Map<String, NovelRecord>> novelConfigAndRecordPair;
     private List<String> pages = new ArrayList<>();
+    private Pair<NovelConfig, Map<String, NovelRecord>> novelConfigAndRecordPair;
+    private HomeView homeView;
+    private NovelView novelView;
 
-
-    NovelReader() {
+    /**
+     * 构造函数，初始化主窗口和视图
+     * @author zxy
+     * @date 2024/10/17
+     */
+    public NovelReader() {
         try {
             // 设置UI样式为系统默认样式
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException |
-                UnsupportedLookAndFeelException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
         frame = new JFrame();
@@ -64,516 +55,82 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         frame.setLocation(800, 500);//设置窗口的显示位置
         frame.setLayout(null);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);//创建并关闭窗口时的默认操作
-        //        jFrame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE); // 不设置默认关闭操作，以便我们可以自定义
 
-        openHome();
+        // 加载阅读记录
+        novelConfigAndRecordPair = ReadingRecord.loadRecord(frame);
+        // 初始化主页视图
+        homeView = new HomeView(frame, this::openNovel, novelConfigAndRecordPair);
+        homeView.show();
 
         frame.setVisible(true);
     }
 
     /**
-     * 打开主页
+     * 打开小说，切换到小说视图并计算页内容
+     * @param selectedFilePath 小说文件路径
      * @author zxy
      * @date 2024/10/21
      */
-    private void openHome(){
-        novelConfigAndRecordPair = ReadingRecord.loadRecord(frame);
-        addOpenButton();
-        addCloseButton();
-        addNovelScrollList();
-    }
-
-    /**
-     * 添加打开按钮
-     * @author zxy
-     * @date 2024/10/21
-     */
-    private void addOpenButton(){
-        openButton = new JButton("打开新文件");
-        openButton.setBounds(6, 10, 80, 35);
-        openButton.setForeground(Color.WHITE); // 设置按钮背景色
-        openButton.setFont(new Font("Serif", Font.PLAIN, 13));
-        openButton.setContentAreaFilled(false);// 移除内容区域填充
-        openButton.setOpaque(false);// 设为不透明
-        openButton.setBorder(new LineBorder(Color.GRAY, 1));// 设置灰色边框
-        openButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));// 设置光标为手型
-        openButton.addActionListener(e -> {
-            // 创建一个文件选择器
-            JFileChooser fileChooser = new JFileChooser();
-            // 设置文件选择器默认目录为当前目录
-            fileChooser.setCurrentDirectory(new File("."));
-            // 设置文件过滤器，只允许选择txt文件
-            FileNameExtensionFilter txtFilter = new FileNameExtensionFilter("文本文件 (*.txt)", "txt");
-            fileChooser.setFileFilter(txtFilter);
-
-            // 显示文件选择器
-            int result = fileChooser.showOpenDialog(frame);
-
-            // 检查用户是否点击了打开按钮
-            if (result == JFileChooser.APPROVE_OPTION) {
-                File selectedFile = fileChooser.getSelectedFile();
-                filePath = selectedFile.getAbsolutePath();
-                openNovel();
-            }
-        });
-
-        frame.add(openButton);
-    }
-
-    /**
-     * 添加关闭按钮
-     * @author zxy
-     * @date 2024/10/21
-     */
-    private void addCloseButton() {
-        closeButton = new JButton("×");
-        closeButton.setBounds(frame.getSize().width - 35, 10, 25, 25);
-        // 设置按钮背景色
-        closeButton.setForeground(Color.WHITE);
-        closeButton.setFont(new Font("Serif", Font.PLAIN, 18));
-        closeButton.setContentAreaFilled(false); // 移除内容区域填充
-        closeButton.setOpaque(false); // 设为不透明
-        // 设置白色边框
-        closeButton.setBorder(new LineBorder(Color.GRAY, 1));
-        // 设置光标为手型
-        closeButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        closeButton.addActionListener(e -> System.exit(1));
-
-        frame.add(closeButton);
-    }
-
-    /**
-     * 添加滚动列表
-     * @author zxy
-     * @date 2024/10/21
-     */
-    private void addNovelScrollList(){
-        List<String> novelList = new ArrayList<>();
-        if(CollectionUtil.isNotEmpty(novelConfigAndRecordPair.getValue())) {
-            novelList = new ArrayList<>(novelConfigAndRecordPair.getValue().keySet());
+    public void openNovel(String selectedFilePath) {
+        filePath = selectedFilePath;
+        if (novelView == null) {
+            novelView = new NovelView(frame, novelConfigAndRecordPair.getKey());
         }
-        DefaultListModel<NovelItem> listModel = new DefaultListModel<>();
-        for (String item : novelList) {
-            listModel.addElement(new NovelItem(item));
-        }
-        JList<NovelItem> list = new JList<>(listModel);
-        list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        NovelItemRenderer renderer = new NovelItemRenderer();
-        list.setCellRenderer(renderer);
-        list.setFont(new Font("Serif", Font.PLAIN, 16));
-        list.setBackground(new Color(0, 0, 0, 0)); // 设置透明背景
-        list.setForeground(Color.WHITE);
+        homeView.hide();
+        novelView.show();
 
-        // 根据文本设置项的宽度
-        int maxWidth = 0;
-        int maxHeight = 0;
-        for (int i = 0; i < listModel.size(); i++) {
-            Dimension size = renderer.getPreferredSizeForItem(listModel.get(i));
-            if (size.width > maxWidth) {
-                maxWidth = size.width;
-            }
-            if (size.height > maxHeight) {
-                maxHeight = size.height;
-            }
+        // 检查是否已有阅读记录，若有则恢复当前页
+        if (novelConfigAndRecordPair.getValue().containsKey(filePath)) {
+            currentPage = novelConfigAndRecordPair.getValue().get(filePath).getCurrentPage();
+        } else {
+            currentPage = 0;
         }
 
-        // 设置每个项的高度
-        list.setFixedCellHeight(maxHeight + 5);
-        // 设置每个项的宽度
-        list.setFixedCellWidth(maxWidth);
-        list.setPreferredSize(new Dimension(maxWidth, list.getPreferredSize().height));
-        // 设为不透明
-        list.setOpaque(false);
-
-        list.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                int index = list.locationToIndex(e.getPoint());
-                Rectangle bounds = list.getCellBounds(index, index);
-                if (bounds.contains(e.getPoint())) {
-                    if (e.getButton() == MouseEvent.BUTTON1) {
-                        list.setSelectedIndex(index);
-                        filePath =
-                                list.getModel().getElementAt(index).getFilePath() + list.getModel().getElementAt(index).getFileName();
-                        openNovel();
-                    } else if (e.getButton() == MouseEvent.BUTTON3) {
-                        list.setSelectedIndex(index);
-                        int confirm = JOptionPane.showConfirmDialog(frame, "是否删除 “" + list.getModel().getElementAt(index).getFileName() + "” ？",
-                                "删除记录", JOptionPane.YES_NO_OPTION);
-
-                        if (confirm == JOptionPane.YES_OPTION) {
-                            // 执行删除操作
-                            if (index != -1) {
-                                filePath = list.getModel().getElementAt(index).getFilePath() + list.getModel().getElementAt(index).getFileName();
-                                // 移除选中的项
-                                listModel.remove(index);
-                                novelConfigAndRecordPair.getValue().remove(filePath);
-                                // 删除文件中的该项
-                                ReadingRecord.deleteRecord(frame, filePath);
-                            }
-                        }
-                    }
-                }
-            }
-        });
-
-        // 将列表放入滚动面板
-        scrollPane = new JScrollPane(list);
-        scrollPane.setPreferredSize(new Dimension(220, list.getPreferredSize().height + 20));
-        scrollPane.setBounds(0, 50, frame.getSize().width - 10, frame.getSize().height - 60);
-        scrollPane.setPreferredSize(new Dimension(10, 20));
-        scrollPane.setOpaque(false); // 设为不透明
-        scrollPane.getViewport().setOpaque(false); // 设为透明
-        scrollPane.setBorder(null); // 移除边框
-
-        // 设置垂直滚动条透明和宽度等样式
-        JScrollBar verticalScrollBar = scrollPane.getVerticalScrollBar();
-        setScrollbarTransparency(verticalScrollBar, 4, verticalScrollBar.getHeight());
-
-        // 设置水平滚动条透明和高度等样式
-        JScrollBar horizontalScrollBar = scrollPane.getHorizontalScrollBar();
-        setScrollbarTransparency(horizontalScrollBar, horizontalScrollBar.getWidth(), 4);
-
-        frame.add(scrollPane);
+        // 计算分页
+        pages = PageCalculator.calculatePages(filePath, novelView.getLabel());
+        showPage();
     }
 
     /**
-     * 打开小说
-     * @author zxy
-     * @date 2024/10/21
-     */
-    private void openNovel() {
-        if (StrUtil.isNotBlank(filePath)) {
-            File file = new File(filePath);
-            if (!file.exists() || !file.isFile()){
-                JOptionPane.showConfirmDialog(frame, "文件 “" + filePath + "” 不存在！",
-                        "文件不存在", JOptionPane.DEFAULT_OPTION);
-                return;
-            } else if (!file.getName().toLowerCase().endsWith(".txt")) {
-                JOptionPane.showConfirmDialog(frame, "文件 “" + filePath + "” 不是txt！",
-                        "文件格式错误", JOptionPane.DEFAULT_OPTION);
-                return;
-            }
-            frame.remove(openButton);
-            frame.remove(closeButton);
-            frame.remove(scrollPane);
-            frame.revalidate(); // 更新界面
-            frame.repaint();
-
-            if(novelConfigAndRecordPair.getValue().containsKey(filePath)) {
-                currentPage = novelConfigAndRecordPair.getValue().get(filePath).getCurrentPage();
-            } else{
-                currentPage = 0;
-            }
-
-            label = new JLabel();
-            label.setLayout(new FlowLayout());
-            label.setBounds(0, 0, frame.getSize().width, frame.getSize().height);
-            label.setFont(novelConfigAndRecordPair.getKey().getFont());
-            label.setForeground(novelConfigAndRecordPair.getKey().getForeground());
-            label.setVerticalAlignment(JLabel.TOP); // 或者 JLabel.CENTER, JLabel.BOTTOM
-            label.setVerticalTextPosition(JLabel.TOP); // 或者 JLabel.CENTER, JLabel.BOTTOM
-            frame.add(label);
-
-            calculationPages();
-            showPage();
-        }
-    }
-
-    /**
-     * 设置滚动条样式和透明
-     * @param scrollBar
-     * @param width
-     * @param height
-     * @author zxy
-     * @date 2024/10/21
-     */
-    private void setScrollbarTransparency(JScrollBar scrollBar, int width, int height){
-        scrollBar.setOpaque(false);
-        scrollBar.setBackground(new Color(0, 0, 0, 0)); // 设置滚动条透明背景
-        scrollBar.setUI(new BasicScrollBarUI() {
-            @Override
-            protected void configureScrollBarColors() {
-                this.thumbColor = Color.LIGHT_GRAY; // 设置滚动条滑块颜色
-                this.trackColor = new Color(0, 0, 0, 0); // 设置滚动条轨道颜色
-            }
-
-            @Override
-            protected JButton createDecreaseButton(int orientation) {
-                JButton button = new JButton() {
-                    @Override
-                    protected void paintComponent(Graphics g) {
-                        // 透明背景
-                        g.setColor(new Color(0, 0, 0, 0));
-                        g.fillRect(0, 0, getWidth(), getHeight());
-                    }
-                };
-                button.setPreferredSize(new Dimension(0, 0)); // 设置大小为零
-                button.setBorder(null); // 移除边框
-                button.setOpaque(false); // 设为透明
-                return button;
-            }
-
-            @Override
-            protected JButton createIncreaseButton(int orientation) {
-                JButton button = new JButton() {
-                    @Override
-                    protected void paintComponent(Graphics g) {
-                        // 透明背景
-                        g.setColor(new Color(0, 0, 0, 0));
-                        g.fillRect(0, 0, getWidth(), getHeight());
-                    }
-                };
-                button.setPreferredSize(new Dimension(0, 0)); // 设置大小为零
-                button.setBorder(null); // 移除边框
-                button.setOpaque(false); // 设为透明
-                return button;
-            }
-
-            @Override
-            public Dimension getPreferredSize(JComponent c) {
-                return new Dimension(width, height); // 设置滚动条宽度为10
-            }
-        });
-    }
-
-    /**
-     * 计算页内容
-     * @author zxy
-     * @date 2024/10/21
-     */
-    private void calculationPages() {
-        pages.clear();
-        try {
-            BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(new FileInputStream(filePath), EncodingDetect.getJavaEncode(filePath)));
-            String line = reader.readLine();
-            StringBuilder text = new StringBuilder();
-
-            // 获取字体信息
-            FontMetrics fontMetrics = label.getFontMetrics(label.getFont());
-            // 获取单个中文字符的宽度和高度
-            int charWidth = fontMetrics.charWidth('测'); // 使用中文字符计算宽度
-            int charHeight = fontMetrics.getHeight(); // 字符高度
-            // 计算每行最多能显示的中文字数
-            int charsPerLine = label.getWidth() / charWidth;
-            // 计算最多能显示的行数
-            int realLineHeight = (int)(charHeight * 1.2); // 根据经验调整
-            int maxLines = label.getHeight() / realLineHeight;
-
-            while (line != null) {
-                text.append("<html>");
-                int i = 0;
-                do {
-                    int lineCount;
-                    if ((line.length() % charsPerLine) != 0) {
-                        lineCount = line.length() / charsPerLine + 1;
-                    } else {
-                        lineCount = line.length() / charsPerLine == 0 ? 1 : line.length() / charsPerLine;
-                    }
-                    i += lineCount;
-                    if (i > maxLines) {
-                        int endIndex = charsPerLine * (lineCount - (i - maxLines));
-                        text.append(line, 0, endIndex).append("<br/>");
-                        line = line.substring(endIndex);
-                        break;
-                    }
-                    text.append(line).append("<br/>");
-                } while ((line = reader.readLine()) != null);
-                pages.add(text.append("</html>").toString());
-                text.delete(0, text.length());
-            }
-            reader.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    /**
-     * 展示页内容
+     * 展示当前页内容
      * @author zxy
      * @date 2024/10/21
      */
     private void showPage() {
         if (currentPage >= 0 && currentPage < pages.size()) {
-            label.setText(pages.get(currentPage));
+            novelView.getLabel().setText(pages.get(currentPage));
         }
     }
 
     /**
-     * 展示设置弹出框
+     * 展示设置对话框
      * @author zxy
      * @date 2024/10/21
      */
-    public void showSetting() {
-        // 创建颜色选择器
-        JColorChooser colorChooser = new JColorChooser(label.getForeground());
-        // 只保留RGB色轮面板（兼容中英文 locale）
-        AbstractColorChooserPanel[] panels = colorChooser.getChooserPanels();
-        for (AbstractColorChooserPanel p : panels) {
-            String name = p.getDisplayName();
-            if (!name.equalsIgnoreCase("RGB")
-                    && !name.contains("RGB")) {
-                colorChooser.removeChooserPanel(p);
-            }
-        }
-        JButton colorButton = new JButton("选择颜色");
-        colorButton.addActionListener(e -> {
-            // 使用 createDialog 创建自定义颜色对话框
-            JDialog colorDialog = JColorChooser.createDialog(frame, "选择颜色", true, colorChooser,
-                    ok -> selectedColor = colorChooser.getColor(),  // OK 监听器
-                    cancel -> {});  // Cancel 监听器
-            colorDialog.setVisible(true);
-        });
-
-        final JTextField textWidth = new JTextField(10);
-        ((AbstractDocument)textWidth.getDocument()).setDocumentFilter(new NumericDocumentFilter());
-        textWidth.setText(String.valueOf(frame.getSize().width));
-        final JTextField textHeight = new JTextField(10);
-        ((AbstractDocument)textHeight.getDocument()).setDocumentFilter(new NumericDocumentFilter());
-        textHeight.setText(String.valueOf(frame.getSize().height));
-
-        final JTextField textFontSize = new JTextField(10);
-        ((AbstractDocument)textFontSize.getDocument()).setDocumentFilter(new NumericDocumentFilter());
-        textFontSize.setText(String.valueOf(label.getFont().getSize()));
-
-        final JTextField jumpPage = new JTextField(10);
-        ((AbstractDocument)jumpPage.getDocument()).setDocumentFilter(new NumericDocumentFilter());
-        jumpPage.setText(String.valueOf(currentPage));
-
-        JComboBox<Pair<String, Integer>> fontStyleComboBox = new JComboBox<>();
-        fontStyleComboBox.addItem(new Pair<>("常规", Font.PLAIN));
-        fontStyleComboBox.addItem(new Pair<>("加粗", Font.BOLD));
-        fontStyleComboBox.addItem(new Pair<>("斜体", Font.ITALIC));
-        fontStyleComboBox.setSelectedIndex(label.getFont().getStyle());
-        // 添加下拉框的动作监听器，以便在用户选择项时获取值
-        fontStyleComboBox.addActionListener(e -> {
-            fontStyle = ((Pair<String, Integer>) fontStyleComboBox.getSelectedItem()).getValue();
-        });
-
-        JComboBox<Pair<String, String>> fontComboBox = new JComboBox<>();
-        fontComboBox.addItem(new Pair<>("Serif", "Serif"));
-        fontComboBox.addItem(new Pair<>("SansSerif", "SansSerif"));
-        fontComboBox.addItem(new Pair<>("Monospaced", "Monospaced"));
-        fontComboBox.addItem(new Pair<>("Dialog", "Dialog"));
-        fontComboBox.addItem(new Pair<>("DialogInput", "DialogInput"));
-        fontComboBox.addItem(new Pair<>("Arial", "Arial"));
-//        fontComboBox.addItem(new Pair<>("Times New Roman", "Times New Roman"));
-        fontComboBox.addItem(new Pair<>("Courier New", "Courier New"));
-        fontComboBox.addItem(new Pair<>("Verdana", "Verdana"));
-        fontComboBox.addItem(new Pair<>("宋体", "SimSun"));
-        fontComboBox.addItem(new Pair<>("微软雅黑", "Microsoft YaHei"));
-        fontComboBox.addItem(new Pair<>("黑体", "SimHei"));
-        fontComboBox.addItem(new Pair<>("楷体", "KaiTi"));
-        fontComboBox.addItem(new Pair<>("仿宋", "FangSong"));
-        fontComboBox.addItem(new Pair<>("隶书", "LiSu"));
-        fontComboBox.addItem(new Pair<>("等线", "DengXian"));
-        String currentFontName = label.getFont().getName(); // 获取字体名称
-
-        // 遍历 ComboBox 的项，找到匹配的字体
-        for (int i = 0; i < fontComboBox.getItemCount(); i++) {
-            Pair<String, String> item = fontComboBox.getItemAt(i);
-            if (item.getValue().equalsIgnoreCase(currentFontName)) {
-                fontComboBox.setSelectedIndex(i); // 找到匹配项，设置选中
-                break;
-            }
-        }
-        // 添加下拉框的动作监听器，以便在用户选择项时获取值
-        fontComboBox.addActionListener(e -> {
-            font = ((Pair<String, String>) fontComboBox.getSelectedItem()).getValue();
-        });
-
-        JButton okButton = new JButton("确认");
-        JButton cancelButton = new JButton("取消");
-
-        // 创建面板来放置组件
-        JPanel panel = new JPanel(new SpringLayout()); // 使用网格布局
-        panel.add(new JLabel("字体颜色:"));
-        panel.add(colorButton);
-        panel.add(new JLabel("字体大小:"));
-        panel.add(textFontSize);
-        panel.add(new JLabel("字体样式:"));
-        panel.add(fontStyleComboBox);
-        panel.add(new JLabel("字体:"));
-        panel.add(fontComboBox);
-        panel.add(new JLabel("窗口宽度:"));
-        panel.add(textWidth);
-        panel.add(new JLabel("窗口高度:"));
-        panel.add(textHeight);
-        panel.add(new JLabel("跳页(0/" + (pages.size() - 1) + "):"));
-        panel.add(jumpPage);
-
-        // 创建一个新的面板来容纳按钮
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
-        buttonPanel.add(okButton);
-        buttonPanel.add(cancelButton);
-
-        // 将按钮面板添加到主面板
-        panel.add(new JLabel()); // 空标签占位
-        panel.add(buttonPanel);
-
-        panel.setBorder(new EmptyBorder(10, 20, 10, 20));
-        SpringUtilities.makeCompactGrid(panel,
-                8, 2,  // rows, cols
-                5, 5,  // initialX, initialY
-                5, 5); // xPad, yPad
-
-        // 创建对话框
-        JDialog dialog = new JDialog(frame, "设置", Dialog.ModalityType.APPLICATION_MODAL);
-        dialog.setContentPane(panel);
-        dialog.pack(); // 自动调整对话框大小以适应其内容
-        dialog.setLocationRelativeTo(frame); // 将对话框放置在父窗口中央
-
-        // 为确认按钮添加监听器
-        okButton.addActionListener(e -> {
-            if (selectedColor == null) {
-                selectedColor = label.getForeground();
-            }
-            if (StrUtil.isBlank(textFontSize.getText())) {
-                // 输入框为空，给出提示信息
-                JOptionPane.showMessageDialog(frame, "请输入字体大小", "提示", JOptionPane.INFORMATION_MESSAGE);
-                textFontSize.requestFocusInWindow(); // 请求输入框获取焦点
-            } else if (StrUtil.isBlank(textWidth.getText())) {
-                // 输入框为空，给出提示信息
-                JOptionPane.showMessageDialog(frame, "请输入窗口宽度", "提示", JOptionPane.INFORMATION_MESSAGE);
-                textWidth.requestFocusInWindow(); // 请求输入框获取焦点
-            } else if (StrUtil.isBlank(textHeight.getText())) {
-                // 输入框为空，给出提示信息
-                JOptionPane.showMessageDialog(frame, "请输入窗口高度", "提示", JOptionPane.INFORMATION_MESSAGE);
-                textHeight.requestFocusInWindow(); // 请求输入框获取焦点
-            } else if (Integer.valueOf(textWidth.getText()) < 100 || Integer.valueOf(textWidth.getText()) < 100) {
-                JOptionPane.showMessageDialog(frame, "窗口的宽高不能小于100", "提示", JOptionPane.INFORMATION_MESSAGE);
-            } else if (Integer.valueOf(jumpPage.getText()) < 0 || Integer.valueOf(jumpPage.getText()) > pages.size() - 1) {
-                JOptionPane.showMessageDialog(frame, "页码不能小于0或大于" + (pages.size() - 1), "提示", JOptionPane.INFORMATION_MESSAGE);
-            } else {
-                fontSize = Integer.valueOf(textFontSize.getText());
-                fontStyle =  fontStyleComboBox.getSelectedIndex();
-                font = ((Pair<String, String>) fontComboBox.getSelectedItem()).getValue();
-                width = Integer.valueOf(textWidth.getText());
-                height = Integer.valueOf(textHeight.getText());
-                currentPage = Integer.valueOf(jumpPage.getText());
-                dialog.dispose(); // 关闭对话框
-            }
-        });
-
-        // 为取消按钮添加监听器
-        cancelButton.addActionListener(e -> {
-            dialog.dispose(); // 关闭对话框
-        });
-        // 显示对话框
-        dialog.setVisible(true);
+    private void showSettings() {
+        new SettingsDialog(frame, novelView.getLabel(), pages.size(), currentPage,
+                changes -> {
+                    // 应用设置
+                    frame.setSize(changes.width, changes.height);
+                    novelView.getLabel().setBounds(0, 0, changes.width, changes.height);
+                    novelView.getLabel().setFont(new Font(changes.fontName, changes.fontStyle, changes.fontSize));
+                    novelView.getLabel().setForeground(changes.color);
+                    currentPage = changes.jumpPage;
+                    pages = PageCalculator.calculatePages(filePath, novelView.getLabel());
+                    showPage();
+                }).show();
     }
 
     @Override
     public void mousePressed(MouseEvent e) {
-        //鼠标点击的时候，把当前屏幕上x，y的值给全局变量x，y
+        // 记录鼠标按下位置
         x = e.getX();
         y = e.getY();
     }
 
     @Override
     public void mouseDragged(MouseEvent e) {
-        //设置jframe位置为当前鼠标按住拖动的位置减去最开始鼠标在jframe按下的位置
+        // 拖动窗口
         frame.setLocation(e.getXOnScreen() - x, e.getYOnScreen() - y);
     }
 
@@ -583,31 +140,33 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
 
     @Override
     public void mouseClicked(MouseEvent e) {
-        if(Arrays.asList(frame.getContentPane().getComponents()).contains(label)) {
+        // 如果小说视图可见，处理点击事件
+        if (novelView != null && novelView.isVisible()) {
             if (e.getButton() == MouseEvent.BUTTON3) {
-                ReadingRecord.saveRecord(frame, label, filePath, currentPage);
-                frame.remove(label);
+                // 右键保存记录并返回主页
+                ReadingRecord.saveRecord(frame, novelView.getLabel(), filePath, currentPage);
                 novelConfigAndRecordPair = ReadingRecord.loadRecord(frame);
-                openHome();
-                frame.revalidate(); // 更新界面
-                frame.repaint();
-
+                novelView.hide();
+                homeView.updateNovelList(novelConfigAndRecordPair);  // 更新列表
+                homeView.show();
             } else if (e.getButton() == MouseEvent.BUTTON1) {
-                showSetting();
-                if (width != null && height != null) {
-                    frame.setSize(width, height);
-                    label.setBounds(0, 0, frame.getSize().width, frame.getSize().height);
-                }
-                if (fontSize != null && fontStyle != null && font != null) {
-                    label.setFont(new Font(font, fontStyle, fontSize));
-                }
-                if (selectedColor != null) {
-                    label.setForeground(new Color(selectedColor.getRGB()));
-                }
-                calculationPages();
-                showPage();
+                // 左键显示设置
+                showSettings();
             }
         }
+    }
+
+    @Override
+    public void mouseWheelMoved(MouseWheelEvent e) {
+        // 处理鼠标滚轮翻页
+        int rotation = e.getWheelRotation();
+        if (rotation < 0) {
+            currentPage--;
+        } else if (rotation > 0) {
+            currentPage++;
+        }
+        currentPage = Math.max(0, Math.min(currentPage, pages.size() - 1));
+        showPage();
     }
 
     @Override
@@ -620,25 +179,6 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
 
     @Override
     public void mouseExited(MouseEvent e) {
-    }
-
-    @Override
-    public void mouseWheelMoved(MouseWheelEvent e) {
-        // 获取鼠标滚轮的旋转方向
-        int rotation = e.getWheelRotation();
-        if (rotation < 0) {
-            // 鼠标滚轮向前（远离用户），向前翻页
-            --currentPage;
-        } else if (rotation > 0) {
-            // 鼠标滚轮向后（朝向用户），向后翻页
-            ++currentPage;
-        }
-        if (currentPage < 0) {
-            currentPage = 0;
-        } else if (currentPage >= pages.size()) {
-            currentPage = pages.size() - 1;
-        }
-        showPage();
     }
 
     public static void main(String[] args) {

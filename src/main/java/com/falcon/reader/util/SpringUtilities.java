@@ -3,7 +3,7 @@ package com.falcon.reader.util;
 import javax.swing.*;
 import java.awt.*;
 /**
- * TODO
+ * SpringLayout 网格布局工具类
  *
  * @author zxy
  * @date 2025/5/21 18:11
@@ -15,6 +15,7 @@ import java.awt.*;
  */
 public class SpringUtilities {
     /**
+     * 将容器中的组件排列成紧凑的网格布局
      * Aligns the first <code>rows</code> * <code>cols</code>
      * components of <code>parent</code> in
      * a grid. Each component is as big as the maximum
