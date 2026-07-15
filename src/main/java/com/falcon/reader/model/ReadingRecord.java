@@ -6,20 +6,19 @@ import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import com.falcon.reader.entity.NovelConfig;
 import com.falcon.reader.entity.NovelRecord;
-import javafx.util.Pair;
 
 import javax.swing.*;
 import java.awt.*;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
+import java.nio.charset.Charset;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
-import java.util.*;
 import java.util.List;
+import java.util.*;
 
 /**
  * 阅读记录处理类
@@ -60,9 +59,10 @@ public class ReadingRecord {
             } else {
                 // 文件已存在，读取现有内容
                 try {
-                    jsonObject = new JSONObject(new FileReader(BOOKMARK_FILE));
-                } catch (FileNotFoundException e) {
-                    throw new RuntimeException(e);
+                    jsonObject = readJson(path);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return;
                 }
             }
 
@@ -111,7 +111,7 @@ public class ReadingRecord {
             jsonObject.set("novels", novelArray);
 
             // 将JSON对象写入文件
-            try (FileWriter file = new FileWriter(BOOKMARK_FILE)) {
+            try (Writer file = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
                 file.write(jsonObject.toString());
             } catch (IOException ex) {
                 ex.printStackTrace();
@@ -144,9 +144,10 @@ public class ReadingRecord {
                 }
             } else {
                 try {
-                    jsonObject = new JSONObject(new FileReader(BOOKMARK_FILE));
-                } catch (FileNotFoundException e) {
-                    throw new RuntimeException(e);
+                    jsonObject = readJson(path);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return;
                 }
             }
 
@@ -155,10 +156,10 @@ public class ReadingRecord {
             if (jsonObject.containsKey("novels")) {
                 novelArray = jsonObject.getJSONArray("novels");
                 if (!novelArray.isEmpty()) {
-                    for (Object object : novelArray) {
-                        JSONObject novel = (JSONObject) object;
+                    for (int i = 0; i < novelArray.size(); i++) {
+                        JSONObject novel = novelArray.getJSONObject(i);
                         if (novel.containsKey("filePath") && filePath.equals(novel.getStr("filePath"))) {
-                            novelArray.remove(object); // 删除当前遍历到的元素
+                            novelArray.remove(i); // 删除匹配的记录
                             break;
                         }
                     }
@@ -169,7 +170,7 @@ public class ReadingRecord {
             jsonObject.set("novels", novelArray);
 
             // 将更新后的JSON写回文件
-            try (FileWriter file = new FileWriter(BOOKMARK_FILE)) {
+            try (Writer file = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
                 file.write(jsonObject.toString());
             } catch (IOException ex) {
                 ex.printStackTrace();
@@ -184,14 +185,14 @@ public class ReadingRecord {
      * @param frame 主窗口，加载后将应用保存的窗口大小和位置
      * @return Pair对象，左值为NovelConfig（包含字体、颜色等配置），右值为Map<String, NovelRecord>（文件路径到小说记录的映射，按最后阅读时间降序排列）
      */
-    public static Pair<NovelConfig, Map<String, NovelRecord>> loadRecord(JFrame frame) {
+    public static ReadingData loadRecord(JFrame frame) {
         Map<String, NovelRecord> novelRecordMap = new LinkedHashMap<>();
         NovelConfig novelConfig = new NovelConfig();
 
         // 仅当记录文件存在时才执行加载
         if (Files.exists(Paths.get(BOOKMARK_FILE))) {
             try {
-                JSONObject jsonObject = new JSONObject(new FileReader(BOOKMARK_FILE));
+                JSONObject jsonObject = readJson(Paths.get(BOOKMARK_FILE));
 
                 // 加载窗口大小
                 if (jsonObject.containsKey("width") && jsonObject.containsKey("height")) {
@@ -235,6 +236,32 @@ public class ReadingRecord {
                 JOptionPane.showMessageDialog(frame, "加载记录失败: " + ex.getMessage());
             }
         }
-        return new Pair<>(novelConfig, novelRecordMap);
+        return new ReadingData(novelConfig, novelRecordMap);
+    }
+
+    private static JSONObject readJson(Path path) throws IOException {
+        byte[] bytes = Files.readAllBytes(path);
+        if (bytes.length == 0) {
+            return new JSONObject();
+        }
+
+        try {
+            return parseJson(bytes, StandardCharsets.UTF_8, true);
+        } catch (IOException | RuntimeException utf8Ex) {
+            try {
+                return parseJson(bytes, Charset.defaultCharset(), false);
+            } catch (RuntimeException defaultCharsetEx) {
+                IOException ex = new IOException("阅读记录文件格式错误，请检查或删除 " + BOOKMARK_FILE, defaultCharsetEx);
+                ex.addSuppressed(utf8Ex);
+                throw ex;
+            }
+        }
+    }
+
+    private static JSONObject parseJson(byte[] bytes, Charset charset, boolean reportMalformedInput) throws IOException {
+        try (Reader reader = new InputStreamReader(new ByteArrayInputStream(bytes),
+                reportMalformedInput ? charset.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT) : charset.newDecoder())) {
+            return new JSONObject(reader);
+        }
     }
 }

@@ -2,17 +2,14 @@ package com.falcon.reader.model;
 
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.StrUtil;
-import com.falcon.reader.entity.NovelConfig;
-import com.falcon.reader.entity.NovelRecord;
 import com.falcon.reader.entity.novelItem.NovelItem;
 import com.falcon.reader.entity.novelItem.NovelItemRenderer;
 import com.falcon.reader.util.UIUtils;
-import javafx.util.Pair;
+
 import javax.swing.*;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -27,20 +24,21 @@ public class HomeView {
     private JButton closeButton;
     private JScrollPane scrollPane;
     private Consumer<String> openNovelCallback;
-    private Pair<NovelConfig, Map<String, NovelRecord>> novelConfigAndRecordPair;
+    private Runnable closeCallback;
+    private ReadingData readingData;
 
     /**
      * 构造函数，初始化主页视图
      * @param frame 主窗口
      * @param openNovelCallback 打开小说回调函数
-     * @param pair 小说配置和记录对
+     * @param readingData
      * @author zxy
-     * @date 2024/10/21
      */
-    public HomeView(JFrame frame, Consumer<String> openNovelCallback, Pair<NovelConfig, Map<String, NovelRecord>> pair) {
+    public HomeView(JFrame frame, Consumer<String> openNovelCallback, Runnable closeCallback, ReadingData readingData) {
         this.frame = frame;
         this.openNovelCallback = openNovelCallback;
-        this.novelConfigAndRecordPair = pair;
+        this.closeCallback = closeCallback;
+        this.readingData = readingData;
         initComponents();
     }
 
@@ -73,28 +71,34 @@ public class HomeView {
         // 创建并配置关闭按钮
         closeButton = UIUtils.createStyledButton("×", frame.getWidth() - 35, 10, 25, 25);
         closeButton.setFont(new Font("Serif", Font.PLAIN, 18));
-        closeButton.addActionListener(e -> System.exit(0));
+        closeButton.addActionListener(e -> closeCallback.run());
         frame.add(closeButton);
 
+        frame.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                updateBounds();
+            }
+        });
+
         // 更新小说列表显示
-        updateNovelList(novelConfigAndRecordPair);
+        updateNovelList(readingData);
     }
 
     /**
      * 更新小说列表，根据提供的配置和记录对刷新列表内容
-     * @param pair 小说配置和记录对
+     * @param readingData
      * @author zxy
-     * @date 2024/10/21
      */
-    public void updateNovelList(Pair<NovelConfig, Map<String, NovelRecord>> pair) {
+    public void updateNovelList(ReadingData readingData) {
         // 如果滚动面板已存在，先移除它
         if (scrollPane != null) {
             frame.remove(scrollPane);
         }
-        novelConfigAndRecordPair = pair;
+        this.readingData = readingData;
 
         // 获取小说路径列表
-        List<String> novelList = CollectionUtil.isNotEmpty(pair.getValue()) ? new ArrayList<>(pair.getValue().keySet()) : new ArrayList<>();
+        List<String> novelList = CollectionUtil.isNotEmpty(readingData.getRecords()) ? new ArrayList<>(readingData.getRecords().keySet()) : new ArrayList<>();
         DefaultListModel<NovelItem> listModel = new DefaultListModel<>();
         // 将路径转换为NovelItem并添加到模型中
         novelList.forEach(item -> listModel.addElement(new NovelItem(item)));
@@ -114,7 +118,7 @@ public class HomeView {
                 int index = list.locationToIndex(e.getPoint());
                 if (index != -1 && list.getCellBounds(index, index).contains(e.getPoint())) {
                     NovelItem item = listModel.get(index);
-                    String path = item.getFilePath() + item.getFileName();
+                    String path = item.getFullPath();
                     if (e.getButton() == java.awt.event.MouseEvent.BUTTON1) {
                         // 左键点击打开小说
                         openNovelCallback.accept(path);
@@ -123,7 +127,7 @@ public class HomeView {
                         int confirm = JOptionPane.showConfirmDialog(frame, "是否删除 “" + item.getFileName() + "” ？", "删除记录", JOptionPane.YES_NO_OPTION);
                         if (confirm == JOptionPane.YES_OPTION) {
                             listModel.remove(index);
-                            pair.getValue().remove(path);
+                            readingData.getRecords().remove(path);
                             ReadingRecord.deleteRecord(frame, path);
                         }
                     }
@@ -133,10 +137,10 @@ public class HomeView {
 
         // 创建滚动面板并配置样式
         scrollPane = new JScrollPane(list);
-        scrollPane.setBounds(0, 50, frame.getWidth() - 10, frame.getHeight() - 60);
         scrollPane.setOpaque(false);
         scrollPane.getViewport().setOpaque(false);
         scrollPane.setBorder(null);
+        updateBounds();
 
         // 设置滚动条透明度
         UIUtils.setScrollbarTransparency(scrollPane.getVerticalScrollBar(), 4, scrollPane.getVerticalScrollBar().getHeight());
@@ -145,6 +149,15 @@ public class HomeView {
         frame.add(scrollPane);
         frame.revalidate();
         frame.repaint();
+    }
+
+    private void updateBounds() {
+        if (closeButton != null) {
+            closeButton.setBounds(Math.max(0, frame.getWidth() - 35), 10, 25, 25);
+        }
+        if (scrollPane != null) {
+            scrollPane.setBounds(0, 50, Math.max(0, frame.getWidth() - 10), Math.max(0, frame.getHeight() - 60));
+        }
     }
 
     /**

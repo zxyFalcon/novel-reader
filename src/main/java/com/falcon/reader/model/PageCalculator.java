@@ -1,5 +1,6 @@
 package com.falcon.reader.model;
 
+import com.falcon.reader.entity.Chapter;
 import com.falcon.reader.util.EncodingDetect;
 import javax.swing.*;
 import java.awt.*;
@@ -9,6 +10,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * 分页计算器，负责计算小说文本的分页内容
@@ -18,6 +20,9 @@ import java.util.List;
  * @date 2026/2/12 15:24
  **/
 public class PageCalculator {
+    private static final Pattern CHAPTER_PATTERN = Pattern.compile(
+            "^\\s*(第\\s*[一二三四五六七八九十百千万零〇两0-9０-９]+\\s*[章节回卷部集].*|卷\\s*[一二三四五六七八九十百千万零〇两0-9０-９]+.*|Chapter\\s+\\d+.*)\\s*$",
+            Pattern.CASE_INSENSITIVE);
 
     /**
      * 计算小说文件的页内容，根据标签尺寸和字体进行像素级精确分页
@@ -32,23 +37,26 @@ public class PageCalculator {
      * @return 分页内容列表，每个元素是一页完整的 HTML 字符串；如果无法分页或发生异常则返回空列表
      */
     public static List<String> calculatePages(String filePath, JLabel label) {
-        List<String> pages = new ArrayList<>();
+        return calculate(filePath, label.getFontMetrics(label.getFont()), label.getWidth(), label.getHeight()).getPages();
+    }
 
-        // 1. 获取字体度量对象，用于精确测量字符宽度
-        FontMetrics fm = label.getFontMetrics(label.getFont());
+    public static List<String> calculatePages(String filePath, FontMetrics fm, int availableWidth, int availableHeight) {
+        return calculate(filePath, fm, availableWidth, availableHeight).getPages();
+    }
+
+    public static PageResult calculate(String filePath, FontMetrics fm, int availableWidth, int availableHeight) {
+        List<String> pages = new ArrayList<>();
+        List<Chapter> chapters = new ArrayList<>();
 
         // 精确行高 = 上升 + 下降 + 行间距 + 2像素补偿（防止文字紧贴边缘）
         int lineHeight = fm.getAscent() + fm.getDescent() + fm.getLeading() + 2;
 
-        // 标签的有效显示宽度（像素）
-        int availableWidth = label.getWidth();
-
         // 每页最多容纳的行数 = 标签高度 / 行高（向下取整）
-        int maxLines = label.getHeight() / lineHeight;
+        int maxLines = availableHeight / lineHeight;
 
         // 边界保护：如果显示区域宽度或高度不足，直接返回空列表，避免后续除零或无限循环
         if (availableWidth <= 0 || maxLines <= 0) {
-            return pages;
+            return new PageResult(pages, chapters);
         }
 
         // 2. 逐页生成：使用 BufferedReader 按行读取原始文件，并动态切分为显示行
@@ -58,9 +66,11 @@ public class PageCalculator {
 
             List<String> currentPageLines = new ArrayList<>(maxLines + 2); // 当前页已积累的显示行
             int currentLines = 0;                                          // 当前页已占用的行数
+            int lineNumber = 0;
 
             String line;
             while ((line = reader.readLine()) != null) {
+                lineNumber++;
                 // 空行处理
                 if (line.isEmpty()) {
                     // 如果当前页已满，先保存当前页，再清空缓存
@@ -77,12 +87,17 @@ public class PageCalculator {
 
                 // 非空行处理：按像素宽度切分
                 int index = 0; // 当前处理到的字符位置
+                boolean chapterLine = isChapterTitle(line);
                 while (index < line.length()) {
                     // 页满则保存当前页，重置缓存
                     if (currentLines >= maxLines) {
                         pages.add(buildPage(currentPageLines));
                         currentPageLines.clear();
                         currentLines = 0;
+                    }
+
+                    if (index == 0 && chapterLine) {
+                        addChapterIfAbsent(chapters, line.trim(), pages.size(), lineNumber);
                     }
 
                     // 贪心算法：从 index 开始，累加字符宽度直到达到可用宽度
@@ -124,10 +139,10 @@ public class PageCalculator {
 
         } catch (IOException e) {
             e.printStackTrace();
-            return new ArrayList<>(); // 异常时返回空列表，调用方自行处理
+            return new PageResult(new ArrayList<>(), new ArrayList<>()); // 异常时返回空结果，调用方自行处理
         }
 
-        return pages;
+        return new PageResult(pages, chapters);
     }
 
     /**
@@ -150,11 +165,54 @@ public class PageCalculator {
             if (content.isEmpty()) {
                 sb.append("<br/>"); // 空行仅输出换行
             } else {
-                sb.append(content).append("<br/>"); // 非空行：文本 + 换行
+                sb.append(escapeHtml(content)).append("<br/>"); // 非空行：文本 + 换行
             }
         }
 
         sb.append("</html>");
         return sb.toString();
+    }
+
+    private static String escapeHtml(String text) {
+        StringBuilder escaped = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            switch (c) {
+                case '&':
+                    escaped.append("&amp;");
+                    break;
+                case '<':
+                    escaped.append("&lt;");
+                    break;
+                case '>':
+                    escaped.append("&gt;");
+                    break;
+                case '"':
+                    escaped.append("&quot;");
+                    break;
+                case '\'':
+                    escaped.append("&#39;");
+                    break;
+                default:
+                    escaped.append(c);
+                    break;
+            }
+        }
+        return escaped.toString();
+    }
+
+    private static boolean isChapterTitle(String line) {
+        String title = line.trim();
+        return title.length() <= 80 && CHAPTER_PATTERN.matcher(title).matches();
+    }
+
+    private static void addChapterIfAbsent(List<Chapter> chapters, String title, int pageIndex, int lineNumber) {
+        if (!chapters.isEmpty()) {
+            Chapter last = chapters.get(chapters.size() - 1);
+            if (last.getLineNumber() == lineNumber || last.getTitle().equals(title)) {
+                return;
+            }
+        }
+        chapters.add(new Chapter(title, pageIndex, lineNumber));
     }
 }

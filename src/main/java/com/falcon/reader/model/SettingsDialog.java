@@ -2,7 +2,6 @@ package com.falcon.reader.model;
 
 import com.falcon.reader.util.NumericDocumentFilter;
 import com.falcon.reader.util.SpringUtilities;
-import javafx.util.Pair;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -65,30 +64,30 @@ public class SettingsDialog {
         ((AbstractDocument) textFontSize.getDocument()).setDocumentFilter(new NumericDocumentFilter());
 
         // 字体样式下拉框
-        JComboBox<Pair<String, Integer>> fontStyleComboBox = new JComboBox<>();
-        fontStyleComboBox.addItem(new Pair<>("常规", Font.PLAIN));
-        fontStyleComboBox.addItem(new Pair<>("加粗", Font.BOLD));
-        fontStyleComboBox.addItem(new Pair<>("斜体", Font.ITALIC));
+        JComboBox<Option<Integer>> fontStyleComboBox = new JComboBox<>();
+        fontStyleComboBox.addItem(new Option<>("常规", Font.PLAIN));
+        fontStyleComboBox.addItem(new Option<>("加粗", Font.BOLD));
+        fontStyleComboBox.addItem(new Option<>("斜体", Font.ITALIC));
         fontStyleComboBox.setSelectedIndex(label.getFont().getStyle());
 
         // 字体名称下拉框
-        JComboBox<Pair<String, String>> fontComboBox = new JComboBox<>();
-        fontComboBox.addItem(new Pair<>("Serif", "Serif"));
-        fontComboBox.addItem(new Pair<>("SansSerif", "SansSerif"));
-        fontComboBox.addItem(new Pair<>("Monospaced", "Monospaced"));
-        fontComboBox.addItem(new Pair<>("Dialog", "Dialog"));
-        fontComboBox.addItem(new Pair<>("DialogInput", "DialogInput"));
-        fontComboBox.addItem(new Pair<>("Arial", "Arial"));
-        //        fontComboBox.addItem(new Pair<>("Times New Roman", "Times New Roman"));
-        fontComboBox.addItem(new Pair<>("Courier New", "Courier New"));
-        fontComboBox.addItem(new Pair<>("Verdana", "Verdana"));
-        fontComboBox.addItem(new Pair<>("宋体", "SimSun"));
-        fontComboBox.addItem(new Pair<>("微软雅黑", "Microsoft YaHei"));
-        fontComboBox.addItem(new Pair<>("黑体", "SimHei"));
-        fontComboBox.addItem(new Pair<>("楷体", "KaiTi"));
-        fontComboBox.addItem(new Pair<>("仿宋", "FangSong"));
-        fontComboBox.addItem(new Pair<>("隶书", "LiSu"));
-        fontComboBox.addItem(new Pair<>("等线", "DengXian"));
+        JComboBox<Option<String>> fontComboBox = new JComboBox<>();
+        fontComboBox.addItem(new Option<>("Serif", "Serif"));
+        fontComboBox.addItem(new Option<>("SansSerif", "SansSerif"));
+        fontComboBox.addItem(new Option<>("Monospaced", "Monospaced"));
+        fontComboBox.addItem(new Option<>("Dialog", "Dialog"));
+        fontComboBox.addItem(new Option<>("DialogInput", "DialogInput"));
+        fontComboBox.addItem(new Option<>("Arial", "Arial"));
+        //        fontComboBox.addItem(new Option<>("Times New Roman", "Times New Roman"));
+        fontComboBox.addItem(new Option<>("Courier New", "Courier New"));
+        fontComboBox.addItem(new Option<>("Verdana", "Verdana"));
+        fontComboBox.addItem(new Option<>("宋体", "SimSun"));
+        fontComboBox.addItem(new Option<>("微软雅黑", "Microsoft YaHei"));
+        fontComboBox.addItem(new Option<>("黑体", "SimHei"));
+        fontComboBox.addItem(new Option<>("楷体", "KaiTi"));
+        fontComboBox.addItem(new Option<>("仿宋", "FangSong"));
+        fontComboBox.addItem(new Option<>("隶书", "LiSu"));
+        fontComboBox.addItem(new Option<>("等线", "DengXian"));
         String currentFontName = label.getFont().getName();
         for (int i = 0; i < fontComboBox.getItemCount(); i++) {
             if (Objects.equals(fontComboBox.getItemAt(i).getValue(), currentFontName)) {
@@ -145,8 +144,8 @@ public class SettingsDialog {
             }
 
             int newFontSize = Integer.parseInt(textFontSize.getText());
-            int newFontStyle = ((Pair<String, Integer>) fontStyleComboBox.getSelectedItem()).getValue();
-            String newFontName = ((Pair<String, String>) fontComboBox.getSelectedItem()).getValue();
+            int newFontStyle = fontStyleComboBox.getItemAt(fontStyleComboBox.getSelectedIndex()).getValue();
+            String newFontName = fontComboBox.getItemAt(fontComboBox.getSelectedIndex()).getValue();
             int newWidth  = Integer.parseInt(textWidth.getText());
             int newHeight = Integer.parseInt(textHeight.getText());
             int newJumpPage = Integer.parseInt(textJumpPage.getText());
@@ -192,6 +191,25 @@ public class SettingsDialog {
             this.width = width;
             this.height = height;
             this.jumpPage = jumpPage;
+        }
+    }
+
+    private static class Option<T> {
+        private final String label;
+        private final T value;
+
+        private Option(String label, T value) {
+            this.label = label;
+            this.value = value;
+        }
+
+        private T getValue() {
+            return value;
+        }
+
+        @Override
+        public String toString() {
+            return label;
         }
     }
 }
