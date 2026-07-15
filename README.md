@@ -3,6 +3,10 @@
 exe下载：<a href="https://github.com/zxyFalcon/novel-reader/releases">novel-reader</a>
 
 ## 功能介绍
+### 1.2
+* 增加小说章节目录，打开小说后点击鼠标中键可以看到当前小说的全部章节
+* 分页和阅读记录等功能优化
+
 ### 1.1
 * 增加阅读目录，启动后进入主页目录
 * 左上角按钮打开新文件，右上角按钮退出

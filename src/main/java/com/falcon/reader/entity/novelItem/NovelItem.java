@@ -2,6 +2,10 @@ package com.falcon.reader.entity.novelItem;
 
 import lombok.Data;
 
+import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 /**
  * 小说项
  *
@@ -10,16 +14,17 @@ import lombok.Data;
  **/
 @Data
 public class NovelItem {
+    private String fullPath;
     private String fileName;
     private String filePath;
 
     public NovelItem(String filePath){
+        Path path = Paths.get(filePath);
+        Path parent = path.getParent();
 
-        // 找到最后一个反斜杠的位置
-        int lastIndex = filePath.lastIndexOf('\\');
-        this.filePath = filePath.substring(0, lastIndex + 1);
-        // 截取最后一个反斜杠后面的内容
-        this.fileName = (lastIndex != -1) ? filePath.substring(lastIndex + 1) : filePath;
+        this.fullPath = filePath;
+        this.fileName = path.getFileName() == null ? filePath : path.getFileName().toString();
+        this.filePath = parent == null ? "" : parent.toString() + File.separator;
     }
 }
 
