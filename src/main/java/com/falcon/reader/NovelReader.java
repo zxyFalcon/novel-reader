@@ -204,6 +204,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
                 // 左键显示设置
                 showSettings();
             } else if (e.getButton() == MouseEvent.BUTTON2) {
+                // 中键显示章节目录
                 showChapters();
             }
         }
