@@ -161,14 +161,14 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         if (pages.isEmpty()) {
             return;
         }
-        new SettingsDialog(frame, novelView.getLabel(), pages.size(), currentPage,
+        new SettingsDialog(frame, novelView.getLabel(),
                 changes -> {
                     // 应用设置
                     frame.setSize(changes.width, changes.height);
                     novelView.getLabel().setBounds(0, 0, changes.width, changes.height);
                     novelView.getLabel().setFont(new Font(changes.fontName, changes.fontStyle, changes.fontSize));
                     novelView.getLabel().setForeground(changes.color);
-                    loadPagesAsync(filePath, changes.jumpPage);
+                    loadPagesAsync(filePath, currentPage);
                 }).show();
     }
 
@@ -248,7 +248,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         if (pages.isEmpty()) {
             return;
         }
-        new ChapterDialog(frame, chapters, novelView.getLabel().getFont(), pageIndex -> {
+        new ChapterDialog(frame, chapters, novelView.getLabel().getFont(), pages.size(), currentPage, pageIndex -> {
             currentPage = Math.max(0, Math.min(pageIndex, pages.size() - 1));
             showPage();
         }).show();
