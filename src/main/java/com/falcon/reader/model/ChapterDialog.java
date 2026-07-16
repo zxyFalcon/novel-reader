@@ -56,7 +56,7 @@ public class ChapterDialog {
 
         JButton jumpButton = new JButton("跳转");
         JButton cancelButton = new JButton("取消");
-        JTextField pageField = new JTextField(String.valueOf(initialPage + 1), 6);
+        JTextField pageField = new JTextField(String.valueOf(initialPage + 1), 8);
         ((AbstractDocument) pageField.getDocument()).setDocumentFilter(new NumericDocumentFilter());
 
         chapterList.addListSelectionListener(e -> {
@@ -87,6 +87,7 @@ public class ChapterDialog {
         JPanel jumpPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 1));
         jumpPanel.add(new JLabel("页码:"));
         jumpPanel.add(pageField);
+        jumpPanel.add(new JLabel("/ " + maxPages));
 
         JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 1));
         actionPanel.add(jumpButton);
