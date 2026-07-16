@@ -44,6 +44,10 @@ public class ChapterDialog {
         chapterList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         chapterList.setFont(font.deriveFont(Font.PLAIN, font.getSize()));
         chapterList.setFixedCellHeight(chapterList.getFontMetrics(chapterList.getFont()).getHeight() + 12);
+        int currentChapterIndex = findCurrentChapterIndex();
+        if (currentChapterIndex >= 0) {
+            chapterList.setSelectedIndex(currentChapterIndex);
+        }
 
         JDialog dialog = new JDialog(frame, "目录", Dialog.ModalityType.APPLICATION_MODAL);
         JScrollPane scrollPane = new JScrollPane(chapterList);
@@ -97,6 +101,9 @@ public class ChapterDialog {
         dialog.add(buttonPanel, BorderLayout.SOUTH);
         dialog.pack();
         dialog.setLocationRelativeTo(frame);
+        if (currentChapterIndex >= 0) {
+            chapterList.ensureIndexIsVisible(currentChapterIndex);
+        }
         dialog.setVisible(true);
     }
 
@@ -111,5 +118,17 @@ public class ChapterDialog {
         }
         jumpCallback.accept(page - 1);
         dialog.dispose();
+    }
+
+    private int findCurrentChapterIndex() {
+        int selectedIndex = -1;
+        for (int i = 0; i < chapters.size(); i++) {
+            if (chapters.get(i).getPageIndex() <= initialPage) {
+                selectedIndex = i;
+            } else {
+                break;
+            }
+        }
+        return selectedIndex;
     }
 }
