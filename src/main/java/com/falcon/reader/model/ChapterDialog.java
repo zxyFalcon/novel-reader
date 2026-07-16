@@ -56,7 +56,7 @@ public class ChapterDialog {
 
         JButton jumpButton = new JButton("跳转");
         JButton cancelButton = new JButton("取消");
-        JTextField pageField = new JTextField(String.valueOf(initialPage + 1), 8);
+        JTextField pageField = new JTextField(String.valueOf(initialPage + 1), 7);
         ((AbstractDocument) pageField.getDocument()).setDocumentFilter(new NumericDocumentFilter());
 
         chapterList.addListSelectionListener(e -> {

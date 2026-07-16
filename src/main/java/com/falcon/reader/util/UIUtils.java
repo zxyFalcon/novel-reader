@@ -1,7 +1,7 @@
 package com.falcon.reader.util;
 
 import javax.swing.*;
-import javax.swing.border.LineBorder;
+import javax.swing.border.AbstractBorder;
 import javax.swing.plaf.basic.BasicScrollBarUI;
 import java.awt.*;
 
@@ -30,9 +30,42 @@ public class UIUtils {
         button.setFont(new Font("Serif", Font.PLAIN, text.equals("×") ? 18 : 13));
         button.setContentAreaFilled(false);
         button.setOpaque(false);
-        button.setBorder(new LineBorder(Color.GRAY, 1));
+        button.setBorder(new RoundedLineBorder(Color.GRAY, text.equals("×") ? 4 : 6));
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         return button;
+    }
+
+    private static class RoundedLineBorder extends AbstractBorder {
+        private final Color color;
+        private final int radius;
+
+        private RoundedLineBorder(Color color, int radius) {
+            this.color = color;
+            this.radius = radius;
+        }
+
+        @Override
+        public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(color);
+            g2.drawRoundRect(x, y, width - 1, height - 1, radius, radius);
+            g2.dispose();
+        }
+
+        @Override
+        public Insets getBorderInsets(Component c) {
+            return new Insets(2, 6, 2, 6);
+        }
+
+        @Override
+        public Insets getBorderInsets(Component c, Insets insets) {
+            insets.top = 2;
+            insets.left = 6;
+            insets.bottom = 2;
+            insets.right = 6;
+            return insets;
+        }
     }
 
     /**
