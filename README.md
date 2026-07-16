@@ -7,6 +7,7 @@ exe下载：<a href="https://github.com/zxyFalcon/novel-reader/releases">novel-r
 * 增加小说章节目录，打开小说后点击鼠标中键可以查看当前小说的章节
 * 分页和阅读记录等功能优化
 * 修改图标
+* 跳页功能移动到章节目录页中
 
 ### 1.1
 * 增加阅读目录，启动后进入主页目录

@@ -19,25 +19,19 @@ import java.util.function.Consumer;
 public class SettingsDialog {
     private final JFrame frame;
     private final JLabel label;
-    private final int maxPages;
-    private final int initialPage;
     private final Consumer<SettingChanges> applyCallback;
 
     /**
      * 构造函数，初始化设置对话框
      * @param frame 主窗口
      * @param label 显示标签
-     * @param maxPages 最大页数
-     * @param initialPage 初始页码
      * @param applyCallback 应用设置的回调函数
      * @author zxy
      * @date 2024/10/21
      */
-    public SettingsDialog(JFrame frame, JLabel label, int maxPages, int initialPage, Consumer<SettingChanges> applyCallback) {
+    public SettingsDialog(JFrame frame, JLabel label, Consumer<SettingChanges> applyCallback) {
         this.frame = frame;
         this.label = label;
-        this.maxPages = maxPages;
-        this.initialPage = initialPage;
         this.applyCallback = applyCallback;
     }
 
@@ -103,10 +97,6 @@ public class SettingsDialog {
         JTextField textHeight = new JTextField(String.valueOf(frame.getHeight()), 10);
         ((AbstractDocument) textHeight.getDocument()).setDocumentFilter(new NumericDocumentFilter());
 
-        // 跳页输入框
-        JTextField textJumpPage = new JTextField(String.valueOf(initialPage), 10);
-        ((AbstractDocument) textJumpPage.getDocument()).setDocumentFilter(new NumericDocumentFilter());
-
         JButton okButton = new JButton("确认");
         JButton cancelButton = new JButton("取消");
 
@@ -118,7 +108,6 @@ public class SettingsDialog {
         panel.add(new JLabel("字体:"));       panel.add(fontComboBox);
         panel.add(new JLabel("窗口宽度:"));   panel.add(textWidth);
         panel.add(new JLabel("窗口高度:"));   panel.add(textHeight);
-        panel.add(new JLabel("跳页(0/" + (maxPages - 1) + "):")); panel.add(textJumpPage);
 
         // 按钮面板
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -127,7 +116,7 @@ public class SettingsDialog {
         panel.add(new JLabel()); panel.add(buttonPanel);
 
         panel.setBorder(new EmptyBorder(10, 20, 10, 20));
-        SpringUtilities.makeCompactGrid(panel, 8, 2, 5, 5, 5, 5);
+        SpringUtilities.makeCompactGrid(panel, 7, 2, 5, 5, 5, 5);
 
         // 创建模态对话框
         JDialog dialog = new JDialog(frame, "设置", Dialog.ModalityType.APPLICATION_MODAL);
@@ -148,21 +137,15 @@ public class SettingsDialog {
             String newFontName = fontComboBox.getItemAt(fontComboBox.getSelectedIndex()).getValue();
             int newWidth  = Integer.parseInt(textWidth.getText());
             int newHeight = Integer.parseInt(textHeight.getText());
-            int newJumpPage = Integer.parseInt(textJumpPage.getText());
 
             // 验证窗口大小
             if (newWidth < 100 || newHeight < 100) {
                 JOptionPane.showMessageDialog(dialog, "窗口宽高不能小于100", "提示", JOptionPane.INFORMATION_MESSAGE);
                 return;
             }
-            // 验证页码
-            if (newJumpPage < 0 || newJumpPage >= maxPages) {
-                JOptionPane.showMessageDialog(dialog, "页码无效", "提示", JOptionPane.INFORMATION_MESSAGE);
-                return;
-            }
 
             // 通过回调应用设置
-            applyCallback.accept(new SettingChanges(newFontName, newFontStyle, newFontSize, selectedColor[0], newWidth, newHeight, newJumpPage));
+            applyCallback.accept(new SettingChanges(newFontName, newFontStyle, newFontSize, selectedColor[0], newWidth, newHeight));
 
             dialog.dispose();
         });
@@ -181,16 +164,14 @@ public class SettingsDialog {
         public final Color color;
         public final int width;
         public final int height;
-        public final int jumpPage;
 
-        public SettingChanges(String fontName, int fontStyle, int fontSize, Color color, int width, int height, int jumpPage) {
+        public SettingChanges(String fontName, int fontStyle, int fontSize, Color color, int width, int height) {
             this.fontName = fontName;
             this.fontStyle = fontStyle;
             this.fontSize = fontSize;
             this.color = color;
             this.width = width;
             this.height = height;
-            this.jumpPage = jumpPage;
         }
     }
 

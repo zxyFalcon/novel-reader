@@ -1,8 +1,10 @@
 package com.falcon.reader.model;
 
 import com.falcon.reader.entity.Chapter;
+import com.falcon.reader.util.NumericDocumentFilter;
 
 import javax.swing.*;
+import javax.swing.text.AbstractDocument;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -16,12 +18,16 @@ public class ChapterDialog {
     private final JFrame frame;
     private final List<Chapter> chapters;
     private final Font font;
+    private final int maxPages;
+    private final int initialPage;
     private final Consumer<Integer> jumpCallback;
 
-    public ChapterDialog(JFrame frame, List<Chapter> chapters, Font font, Consumer<Integer> jumpCallback) {
+    public ChapterDialog(JFrame frame, List<Chapter> chapters, Font font, int maxPages, int initialPage, Consumer<Integer> jumpCallback) {
         this.frame = frame;
         this.chapters = chapters;
         this.font = font;
+        this.maxPages = maxPages;
+        this.initialPage = initialPage;
         this.jumpCallback = jumpCallback;
     }
 
@@ -46,21 +52,45 @@ public class ChapterDialog {
 
         JButton jumpButton = new JButton("跳转");
         JButton cancelButton = new JButton("取消");
-        jumpButton.addActionListener(e -> jumpToSelected(chapterList, dialog));
+        JTextField pageField = new JTextField(String.valueOf(initialPage + 1), 6);
+        ((AbstractDocument) pageField.getDocument()).setDocumentFilter(new NumericDocumentFilter());
+
+        chapterList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                Chapter chapter = chapterList.getSelectedValue();
+                if (chapter != null) {
+                    pageField.setText(String.valueOf(chapter.getPageIndex() + 1));
+                }
+            }
+        });
+
+        jumpButton.addActionListener(e -> jumpToPage(pageField, dialog));
         cancelButton.addActionListener(e -> dialog.dispose());
 
         chapterList.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2) {
-                    jumpToSelected(chapterList, dialog);
+                    Chapter chapter = chapterList.getSelectedValue();
+                    if (chapter != null) {
+                        pageField.setText(String.valueOf(chapter.getPageIndex() + 1));
+                    }
+                    jumpToPage(pageField, dialog);
                 }
             }
         });
 
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 1));
-        buttonPanel.add(jumpButton);
-        buttonPanel.add(cancelButton);
+        JPanel jumpPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 1));
+        jumpPanel.add(new JLabel("页码:"));
+        jumpPanel.add(pageField);
+
+        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 1));
+        actionPanel.add(jumpButton);
+        actionPanel.add(cancelButton);
+
+        JPanel buttonPanel = new JPanel(new BorderLayout());
+        buttonPanel.add(jumpPanel, BorderLayout.WEST);
+        buttonPanel.add(actionPanel, BorderLayout.EAST);
 
         dialog.setLayout(new BorderLayout(8, 2));
         dialog.add(scrollPane, BorderLayout.CENTER);
@@ -70,12 +100,16 @@ public class ChapterDialog {
         dialog.setVisible(true);
     }
 
-    private void jumpToSelected(JList<Chapter> chapterList, JDialog dialog) {
-        Chapter chapter = chapterList.getSelectedValue();
-        if (chapter == null) {
+    private void jumpToPage(JTextField pageField, JDialog dialog) {
+        if (pageField.getText().isEmpty()) {
             return;
         }
-        jumpCallback.accept(chapter.getPageIndex());
+        int page = Integer.parseInt(pageField.getText());
+        if (page < 1 || page > maxPages) {
+            JOptionPane.showMessageDialog(dialog, "页码范围为 1 到 " + maxPages, "提示", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        jumpCallback.accept(page - 1);
         dialog.dispose();
     }
 }
