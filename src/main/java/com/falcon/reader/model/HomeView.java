@@ -46,6 +46,7 @@ public class HomeView {
     private JScrollPane scrollPane;
     private JLabel emptyResultLabel;
     private Consumer<String> openNovelCallback;
+    private Consumer<ReadingData> readingDataChangeCallback;
     private Runnable closeCallback;
     private ReadingData readingData;
     private SortMode sortMode = SortMode.LAST_READING_TIME;
@@ -59,10 +60,16 @@ public class HomeView {
      * @author zxy
      */
     public HomeView(JFrame frame, Consumer<String> openNovelCallback, Runnable closeCallback, ReadingData readingData) {
+        this(frame, openNovelCallback, closeCallback, readingData, null);
+    }
+
+    public HomeView(JFrame frame, Consumer<String> openNovelCallback, Runnable closeCallback, ReadingData readingData,
+            Consumer<ReadingData> readingDataChangeCallback) {
         this.frame = frame;
         this.openNovelCallback = openNovelCallback;
         this.closeCallback = closeCallback;
         this.readingData = readingData;
+        this.readingDataChangeCallback = readingDataChangeCallback;
         initComponents();
     }
 
@@ -575,6 +582,10 @@ public class HomeView {
     }
 
     private boolean isFinished(NovelRecord record) {
+        if (record != null && record.getCurrentOffset() != null && record.getTotalLength() != null
+                && record.getTotalLength() > 0 && record.getCurrentOffset() >= record.getTotalLength()) {
+            return true;
+        }
         if (record == null || record.getCurrentPage() == null || record.getTotalPages() == null || record.getTotalPages() <= 0) {
             return false;
         }
@@ -582,6 +593,9 @@ public class HomeView {
     }
 
     private boolean isUnread(NovelRecord record) {
+        if (record != null && record.getCurrentOffset() != null) {
+            return record.getCurrentOffset() <= 0;
+        }
         return record == null || record.getCurrentPage() == null || record.getCurrentPage() <= 0;
     }
 
@@ -722,6 +736,7 @@ public class HomeView {
         boolean relocated = ReadingRecord.relocateRecord(frame, oldPath, newPath);
         if (relocated) {
             readingData = ReadingRecord.loadRecord(frame);
+            notifyReadingDataChanged();
             updateNovelList(readingData);
         } else {
             JOptionPane.showMessageDialog(frame, "未找到可更新的阅读记录。", "重新定位失败", JOptionPane.WARNING_MESSAGE);
@@ -734,7 +749,14 @@ public class HomeView {
         if (confirm == JOptionPane.YES_OPTION) {
             readingData.getRecords().remove(path);
             ReadingRecord.deleteRecord(frame, path);
+            notifyReadingDataChanged();
             updateNovelList(readingData);
+        }
+    }
+
+    private void notifyReadingDataChanged() {
+        if (readingDataChangeCallback != null) {
+            readingDataChangeCallback.accept(readingData);
         }
     }
 

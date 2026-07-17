@@ -1,6 +1,7 @@
 package com.falcon.reader;
 
 import com.falcon.reader.entity.Chapter;
+import com.falcon.reader.entity.NovelRecord;
 import com.falcon.reader.model.*;
 
 import javax.imageio.ImageIO;
@@ -27,7 +28,9 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
     private String filePath;
     private int currentPage = 0;
     private List<String> pages = new ArrayList<>();
+    private List<Integer> pageStartOffsets = new ArrayList<>();
     private List<Chapter> chapters = new ArrayList<>();
+    private int totalLength = 0;
     private ReadingData readingData;
     private HomeView homeView;
     private NovelView novelView;
@@ -68,7 +71,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         // 加载阅读记录
         readingData = ReadingRecord.loadRecord(frame);
         // 初始化主页视图
-        homeView = new HomeView(frame, this::openNovel, this::saveAndExit, readingData);
+        homeView = new HomeView(frame, this::openNovel, this::saveAndExit, readingData, data -> readingData = data);
         homeView.show();
 
         frame.setVisible(true);
@@ -88,14 +91,17 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         homeView.hide();
         novelView.show();
 
+        Integer targetOffset = null;
         // 检查是否已有阅读记录，若有则恢复当前页
         if (readingData.getRecords().containsKey(filePath)) {
-            currentPage = readingData.getRecords().get(filePath).getCurrentPage();
+            NovelRecord record = readingData.getRecords().get(filePath);
+            currentPage = record.getCurrentPage() == null ? 0 : record.getCurrentPage();
+            targetOffset = record.getCurrentOffset();
         } else {
             currentPage = 0;
         }
 
-        loadPagesAsync(filePath, currentPage);
+        loadPagesAsync(filePath, currentPage, targetOffset);
     }
 
     /**
@@ -110,12 +116,18 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
     }
 
     private void loadPagesAsync(String targetFilePath, int targetPage) {
+        loadPagesAsync(targetFilePath, targetPage, null);
+    }
+
+    private void loadPagesAsync(String targetFilePath, int targetPage, Integer targetOffset) {
         if (pageWorker != null && !pageWorker.isDone()) {
             pageWorker.cancel(true);
         }
 
         pages = new ArrayList<>();
+        pageStartOffsets = new ArrayList<>();
         chapters = new ArrayList<>();
+        totalLength = 0;
         currentPage = Math.max(0, targetPage);
         novelView.getLabel().setText("<html>正在分页，请稍候...</html>");
         FontMetrics fontMetrics = novelView.getLabel().getFontMetrics(novelView.getLabel().getFont());
@@ -136,19 +148,24 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
                 try {
                     PageResult pageResult = get();
                     pages = pageResult.getPages();
+                    pageStartOffsets = pageResult.getPageStartOffsets();
                     chapters = pageResult.getChapters();
+                    totalLength = pageResult.getTotalLength();
                     if (pages.isEmpty()) {
                         currentPage = 0;
                         novelView.getLabel().setText("<html>无法读取或显示该文件</html>");
                         return;
                     }
-                    currentPage = Math.max(0, Math.min(targetPage, pages.size() - 1));
-                    ReadingRecord.saveRecord(frame, novelView.getLabel(), filePath, currentPage, pages.size());
+                    currentPage = targetOffset == null ? Math.max(0, Math.min(targetPage, pages.size() - 1))
+                            : findPageByOffset(targetOffset);
+                    saveCurrentRecord();
                     showPage();
                 } catch (Exception ex) {
                     currentPage = 0;
                     pages = new ArrayList<>();
+                    pageStartOffsets = new ArrayList<>();
                     chapters = new ArrayList<>();
+                    totalLength = 0;
                     novelView.getLabel().setText("<html>分页失败: " + ex.getMessage() + "</html>");
                 }
             }
@@ -172,7 +189,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
                     novelView.getLabel().setBounds(0, 0, changes.width, changes.height);
                     novelView.getLabel().setFont(new Font(changes.fontName, changes.fontStyle, changes.fontSize));
                     novelView.getLabel().setForeground(changes.color);
-                    loadPagesAsync(filePath, currentPage);
+                    loadPagesAsync(filePath, currentPage, getCurrentOffset());
                 }).show();
     }
 
@@ -263,8 +280,33 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
 
     private void saveCurrentRecordNow() {
         if (novelView != null && novelView.isVisible()) {
-            ReadingRecord.saveRecord(frame, novelView.getLabel(), filePath, currentPage, pages.size());
+            ReadingRecord.saveRecord(frame, novelView.getLabel(), filePath, currentPage, pages.size(),
+                    getCurrentOffset(), totalLength);
         }
+    }
+
+    private int getCurrentOffset() {
+        if (pageStartOffsets == null || currentPage < 0 || currentPage >= pageStartOffsets.size()) {
+            return 0;
+        }
+        return pageStartOffsets.get(currentPage);
+    }
+
+    private int findPageByOffset(int offset) {
+        if (pageStartOffsets == null || pageStartOffsets.isEmpty()) {
+            return Math.max(0, Math.min(currentPage, pages.size() - 1));
+        }
+
+        int safeOffset = Math.max(0, offset);
+        int pageIndex = 0;
+        for (int i = 0; i < pageStartOffsets.size(); i++) {
+            if (pageStartOffsets.get(i) <= safeOffset) {
+                pageIndex = i;
+            } else {
+                break;
+            }
+        }
+        return Math.max(0, Math.min(pageIndex, pages.size() - 1));
     }
 
     private void refreshReadingData() {
