@@ -71,7 +71,8 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         // 加载阅读记录
         readingData = ReadingRecord.loadRecord(frame);
         // 初始化主页视图
-        homeView = new HomeView(frame, this::openNovel, this::saveAndExit, readingData, data -> readingData = data);
+        homeView = new HomeView(frame, this::openNovel, this::saveAndExit, readingData, data -> readingData = data,
+                this::showSettings);
         homeView.show();
 
         frame.setVisible(true);
@@ -179,18 +180,39 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
      * @date 2024/10/21
      */
     private void showSettings() {
-        if (pages.isEmpty()) {
-            return;
-        }
-        new SettingsDialog(frame, novelView.getLabel(),
+        JLabel settingsLabel = getSettingsLabel();
+        boolean readingVisible = novelView != null && novelView.isVisible() && filePath != null;
+        new SettingsDialog(frame, settingsLabel,
                 changes -> {
                     // 应用设置
                     frame.setSize(changes.width, changes.height);
-                    novelView.getLabel().setBounds(0, 0, changes.width, changes.height);
-                    novelView.getLabel().setFont(new Font(changes.fontName, changes.fontStyle, changes.fontSize));
-                    novelView.getLabel().setForeground(changes.color);
-                    loadPagesAsync(filePath, currentPage, getCurrentOffset());
+                    Font newFont = new Font(changes.fontName, changes.fontStyle, changes.fontSize);
+                    settingsLabel.setFont(newFont);
+                    settingsLabel.setForeground(changes.color);
+                    readingData.getConfig().setFont(newFont);
+                    readingData.getConfig().setForeground(changes.color);
+                    homeView.refreshLayout();
+                    if (novelView != null) {
+                        novelView.getLabel().setBounds(0, 0, changes.width, changes.height);
+                        novelView.getLabel().setFont(newFont);
+                        novelView.getLabel().setForeground(changes.color);
+                    }
+                    ReadingRecord.saveConfig(frame, settingsLabel);
+                    refreshReadingData();
+                    if (readingVisible) {
+                        loadPagesAsync(filePath, currentPage, getCurrentOffset());
+                    }
                 }).show();
+    }
+
+    private JLabel getSettingsLabel() {
+        if (novelView != null) {
+            return novelView.getLabel();
+        }
+        JLabel label = new JLabel();
+        label.setFont(readingData.getConfig().getFont());
+        label.setForeground(readingData.getConfig().getForeground());
+        return label;
     }
 
     @Override

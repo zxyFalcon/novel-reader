@@ -156,6 +156,45 @@ public class ReadingRecord {
         }
     }
 
+    public static void saveConfig(JFrame frame, JLabel label) {
+        Path path = Paths.get(BOOKMARK_FILE);
+        JSONObject jsonObject;
+
+        if (!Files.exists(path)) {
+            try {
+                Files.createFile(path);
+                jsonObject = new JSONObject();
+            } catch (IOException e) {
+                e.printStackTrace();
+                return;
+            }
+        } else {
+            try {
+                jsonObject = readJson(path);
+            } catch (IOException e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(frame, "保存设置失败: " + e.getMessage());
+                return;
+            }
+        }
+
+        jsonObject.set("width", frame.getSize().width);
+        jsonObject.set("height", frame.getSize().height);
+        jsonObject.set("locationX", frame.getLocation().x);
+        jsonObject.set("locationY", frame.getLocation().y);
+        jsonObject.set("font", label.getFont().getName());
+        jsonObject.set("fontSize", label.getFont().getSize());
+        jsonObject.set("fontStyle", label.getFont().getStyle());
+        jsonObject.set("labelForeground", label.getForeground().getRGB());
+
+        try (Writer file = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
+            file.write(jsonObject.toString());
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(frame, "保存设置失败: " + ex.getMessage());
+        }
+    }
+
     /**
      * 删除指定文件路径的小说阅读记录
      *

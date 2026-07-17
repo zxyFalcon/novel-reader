@@ -47,6 +47,7 @@ public class HomeView {
     private JLabel emptyResultLabel;
     private Consumer<String> openNovelCallback;
     private Consumer<ReadingData> readingDataChangeCallback;
+    private Runnable settingsCallback;
     private Runnable closeCallback;
     private ReadingData readingData;
     private SortMode sortMode = SortMode.LAST_READING_TIME;
@@ -60,16 +61,22 @@ public class HomeView {
      * @author zxy
      */
     public HomeView(JFrame frame, Consumer<String> openNovelCallback, Runnable closeCallback, ReadingData readingData) {
-        this(frame, openNovelCallback, closeCallback, readingData, null);
+        this(frame, openNovelCallback, closeCallback, readingData, null, null);
     }
 
     public HomeView(JFrame frame, Consumer<String> openNovelCallback, Runnable closeCallback, ReadingData readingData,
             Consumer<ReadingData> readingDataChangeCallback) {
+        this(frame, openNovelCallback, closeCallback, readingData, readingDataChangeCallback, null);
+    }
+
+    public HomeView(JFrame frame, Consumer<String> openNovelCallback, Runnable closeCallback, ReadingData readingData,
+            Consumer<ReadingData> readingDataChangeCallback, Runnable settingsCallback) {
         this.frame = frame;
         this.openNovelCallback = openNovelCallback;
         this.closeCallback = closeCallback;
         this.readingData = readingData;
         this.readingDataChangeCallback = readingDataChangeCallback;
+        this.settingsCallback = settingsCallback;
         initComponents();
     }
 
@@ -295,47 +302,56 @@ public class HomeView {
     private void showHomeMenu() {
         JPopupMenu menu = new JPopupMenu();
         JMenu sortMenu = new JMenu("排序");
-        JMenu groupMenu = new JMenu("筛选");
+        JMenu filterMenu = new JMenu("筛选");
+        JMenuItem settingsItem = new JMenuItem("设置");
         JMenuItem sortByNameItem = new JMenuItem("按名称排序");
         JMenuItem sortByTimeItem = new JMenuItem("按最后阅读时间排序");
-        JMenuItem groupAllItem = new JMenuItem("全部");
-        JMenuItem groupUnreadItem = new JMenuItem("未读");
-        JMenuItem groupReadingItem = new JMenuItem("阅读中");
-        JMenuItem groupFinishedItem = new JMenuItem("已读");
-        JMenuItem groupMissingItem = new JMenuItem("失效");
+        JMenuItem filterAllItem = new JMenuItem("全部");
+        JMenuItem filterUnreadItem = new JMenuItem("未读");
+        JMenuItem filterReadingItem = new JMenuItem("阅读中");
+        JMenuItem filterFinishedItem = new JMenuItem("已读");
+        JMenuItem filterMissingItem = new JMenuItem("失效");
         compactSubMenu(sortMenu);
-        compactSubMenu(groupMenu);
+        compactSubMenu(filterMenu);
+        compactMenuItem(settingsItem);
         compactMenuItem(sortByNameItem);
         compactMenuItem(sortByTimeItem);
-        compactMenuItem(groupAllItem);
-        compactMenuItem(groupUnreadItem);
-        compactMenuItem(groupReadingItem);
-        compactMenuItem(groupFinishedItem);
-        compactMenuItem(groupMissingItem);
+        compactMenuItem(filterAllItem);
+        compactMenuItem(filterUnreadItem);
+        compactMenuItem(filterReadingItem);
+        compactMenuItem(filterFinishedItem);
+        compactMenuItem(filterMissingItem);
         markSelected(sortByNameItem, sortMode == SortMode.NAME);
         markSelected(sortByTimeItem, sortMode == SortMode.LAST_READING_TIME);
-        markSelected(groupAllItem, groupMode == GroupMode.ALL);
-        markSelected(groupUnreadItem, groupMode == GroupMode.UNREAD);
-        markSelected(groupReadingItem, groupMode == GroupMode.READING);
-        markSelected(groupFinishedItem, groupMode == GroupMode.FINISHED);
-        markSelected(groupMissingItem, groupMode == GroupMode.MISSING);
+        markSelected(filterAllItem, groupMode == GroupMode.ALL);
+        markSelected(filterUnreadItem, groupMode == GroupMode.UNREAD);
+        markSelected(filterReadingItem, groupMode == GroupMode.READING);
+        markSelected(filterFinishedItem, groupMode == GroupMode.FINISHED);
+        markSelected(filterMissingItem, groupMode == GroupMode.MISSING);
+        settingsItem.addActionListener(e -> {
+            if (settingsCallback != null) {
+                settingsCallback.run();
+            }
+        });
         sortByNameItem.addActionListener(e -> applySort(SortMode.NAME));
         sortByTimeItem.addActionListener(e -> applySort(SortMode.LAST_READING_TIME));
-        groupAllItem.addActionListener(e -> applyGroup(GroupMode.ALL));
-        groupUnreadItem.addActionListener(e -> applyGroup(GroupMode.UNREAD));
-        groupReadingItem.addActionListener(e -> applyGroup(GroupMode.READING));
-        groupFinishedItem.addActionListener(e -> applyGroup(GroupMode.FINISHED));
-        groupMissingItem.addActionListener(e -> applyGroup(GroupMode.MISSING));
+        filterAllItem.addActionListener(e -> applyGroup(GroupMode.ALL));
+        filterUnreadItem.addActionListener(e -> applyGroup(GroupMode.UNREAD));
+        filterReadingItem.addActionListener(e -> applyGroup(GroupMode.READING));
+        filterFinishedItem.addActionListener(e -> applyGroup(GroupMode.FINISHED));
+        filterMissingItem.addActionListener(e -> applyGroup(GroupMode.MISSING));
 
         sortMenu.add(sortByNameItem);
         sortMenu.add(sortByTimeItem);
-        groupMenu.add(groupAllItem);
-        groupMenu.add(groupUnreadItem);
-        groupMenu.add(groupReadingItem);
-        groupMenu.add(groupFinishedItem);
-        groupMenu.add(groupMissingItem);
+        filterMenu.add(filterAllItem);
+        filterMenu.add(filterUnreadItem);
+        filterMenu.add(filterReadingItem);
+        filterMenu.add(filterFinishedItem);
+        filterMenu.add(filterMissingItem);
         menu.add(sortMenu);
-        menu.add(groupMenu);
+        menu.add(filterMenu);
+        menu.addSeparator();
+        menu.add(settingsItem);
         menu.show(menuButton, 0, menuButton.getHeight());
     }
 
@@ -782,6 +798,12 @@ public class HomeView {
         if (emptyResultLabel != null) {
             emptyResultLabel.setBounds(0, 50, Math.max(0, frame.getWidth() - 10), Math.max(0, frame.getHeight() - 60));
         }
+    }
+
+    public void refreshLayout() {
+        updateBounds();
+        frame.revalidate();
+        frame.repaint();
     }
 
     /**
