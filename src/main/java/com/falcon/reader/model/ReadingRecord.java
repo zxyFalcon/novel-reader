@@ -54,6 +54,11 @@ public class ReadingRecord {
      * @param totalPages  当前分页结果的总页数
      */
     public static void saveRecord(JFrame frame, JLabel label, String filePath, int currentPage, Integer totalPages) {
+        saveRecord(frame, label, filePath, currentPage, totalPages, null, null);
+    }
+
+    public static void saveRecord(JFrame frame, JLabel label, String filePath, int currentPage, Integer totalPages,
+            Integer currentOffset, Integer totalLength) {
         Path path = Paths.get(BOOKMARK_FILE);
 
         // 仅当文件路径不为空时才执行保存操作
@@ -94,6 +99,12 @@ public class ReadingRecord {
                             if (totalPages != null && totalPages > 0) {
                                 novel.set("totalPages", totalPages);
                             }
+                            if (currentOffset != null && currentOffset >= 0) {
+                                novel.set("currentOffset", currentOffset);
+                            }
+                            if (totalLength != null && totalLength > 0) {
+                                novel.set("totalLength", totalLength);
+                            }
                             novel.set("lastReadingTime", LocalDateTime.now());
                             flag = false; // 标记为已更新，无需新增
                             break;
@@ -109,6 +120,12 @@ public class ReadingRecord {
                 currentNovel.set("currentPage", currentPage);
                 if (totalPages != null && totalPages > 0) {
                     currentNovel.set("totalPages", totalPages);
+                }
+                if (currentOffset != null && currentOffset >= 0) {
+                    currentNovel.set("currentOffset", currentOffset);
+                }
+                if (totalLength != null && totalLength > 0) {
+                    currentNovel.set("totalLength", totalLength);
                 }
                 currentNovel.set("lastReadingTime", LocalDateTime.now());
                 novelArray.add(currentNovel);

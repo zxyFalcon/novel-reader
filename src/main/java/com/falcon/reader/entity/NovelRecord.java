@@ -15,5 +15,7 @@ public class NovelRecord {
     private String filePath;
     private Integer currentPage;
     private Integer totalPages;
+    private Integer currentOffset;
+    private Integer totalLength;
     private LocalDateTime lastReadingTime;
 }

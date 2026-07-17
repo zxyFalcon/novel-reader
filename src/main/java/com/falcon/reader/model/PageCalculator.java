@@ -47,6 +47,7 @@ public class PageCalculator {
     public static PageResult calculate(String filePath, FontMetrics fm, int availableWidth, int availableHeight) {
         List<String> pages = new ArrayList<>();
         List<Chapter> chapters = new ArrayList<>();
+        List<Integer> pageStartOffsets = new ArrayList<>();
 
         // 精确行高 = 上升 + 下降 + 行间距 + 2像素补偿（防止文字紧贴边缘）
         int lineHeight = fm.getAscent() + fm.getDescent() + fm.getLeading() + 2;
@@ -56,32 +57,40 @@ public class PageCalculator {
 
         // 边界保护：如果显示区域宽度或高度不足，直接返回空列表，避免后续除零或无限循环
         if (availableWidth <= 0 || maxLines <= 0) {
-            return new PageResult(pages, chapters);
+            return new PageResult(pages, chapters, pageStartOffsets, 0);
         }
 
         // 2. 逐页生成：使用 BufferedReader 按行读取原始文件，并动态切分为显示行
+        int totalLength = 0;
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(new FileInputStream(filePath),
                         EncodingDetect.getJavaEncode(filePath)))) {
 
             List<String> currentPageLines = new ArrayList<>(maxLines + 2); // 当前页已积累的显示行
             int currentLines = 0;                                          // 当前页已占用的行数
+            int currentPageStartOffset = 0;
             int lineNumber = 0;
 
             String line;
             while ((line = reader.readLine()) != null) {
                 lineNumber++;
+                int lineStartOffset = totalLength;
                 // 空行处理
                 if (line.isEmpty()) {
                     // 如果当前页已满，先保存当前页，再清空缓存
                     if (currentLines >= maxLines) {
                         pages.add(buildPage(currentPageLines));
+                        pageStartOffsets.add(currentPageStartOffset);
                         currentPageLines.clear();
                         currentLines = 0;
+                    }
+                    if (currentPageLines.isEmpty()) {
+                        currentPageStartOffset = lineStartOffset;
                     }
                     // 空行用一个空字符串占位，后续 buildPage 时会转为 <br/>
                     currentPageLines.add("");
                     currentLines++;
+                    totalLength++;
                     continue;
                 }
 
@@ -92,8 +101,12 @@ public class PageCalculator {
                     // 页满则保存当前页，重置缓存
                     if (currentLines >= maxLines) {
                         pages.add(buildPage(currentPageLines));
+                        pageStartOffsets.add(currentPageStartOffset);
                         currentPageLines.clear();
                         currentLines = 0;
+                    }
+                    if (currentPageLines.isEmpty()) {
+                        currentPageStartOffset = lineStartOffset + index;
                     }
 
                     if (index == 0 && chapterLine) {
@@ -130,19 +143,21 @@ public class PageCalculator {
                     // 继续处理该行剩余的字符
                     index = end;
                 }
+                totalLength += line.length() + 1;
             }
 
             // 3. 处理最后剩余的内容（如果当前页还有未保存的行）
             if (!currentPageLines.isEmpty()) {
                 pages.add(buildPage(currentPageLines));
+                pageStartOffsets.add(currentPageStartOffset);
             }
 
         } catch (IOException e) {
             e.printStackTrace();
-            return new PageResult(new ArrayList<>(), new ArrayList<>()); // 异常时返回空结果，调用方自行处理
+            return new PageResult(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), 0); // 异常时返回空结果，调用方自行处理
         }
 
-        return new PageResult(pages, chapters);
+        return new PageResult(pages, chapters, pageStartOffsets, totalLength);
     }
 
     /**

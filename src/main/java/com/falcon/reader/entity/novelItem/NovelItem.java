@@ -21,6 +21,8 @@ public class NovelItem {
     private String filePath;
     private Integer currentPage;
     private Integer totalPages;
+    private Integer currentOffset;
+    private Integer totalLength;
     private boolean fileExists;
 
     public NovelItem(String filePath){
@@ -38,10 +40,18 @@ public class NovelItem {
         if (record != null) {
             this.currentPage = record.getCurrentPage();
             this.totalPages = record.getTotalPages();
+            this.currentOffset = record.getCurrentOffset();
+            this.totalLength = record.getTotalLength();
         }
     }
 
     public Integer getProgressPercent() {
+        if (currentOffset != null && currentOffset >= 0 && totalLength != null && totalLength > 0) {
+            if (currentPage != null && totalPages != null && totalPages > 0 && currentPage + 1 >= totalPages) {
+                return 100;
+            }
+            return (int) Math.min(100, currentOffset * 100L / totalLength);
+        }
         if (currentPage == null || currentPage < 0 || totalPages == null || totalPages <= 0) {
             return null;
         }
