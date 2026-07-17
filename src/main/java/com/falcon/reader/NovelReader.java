@@ -20,6 +20,8 @@ import java.util.List;
  * @date 2026/2/11 16:16
  */
 public class NovelReader implements MouseListener, MouseMotionListener, MouseWheelListener {
+    private static final int SAVE_DEBOUNCE_DELAY_MS = 1000;
+
     private int x, y;
     private JFrame frame;
     private String filePath;
@@ -30,6 +32,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
     private HomeView homeView;
     private NovelView novelView;
     private SwingWorker<PageResult, Void> pageWorker;
+    private Timer saveTimer;
 
     /**
      * 构造函数，初始化主窗口和视图
@@ -140,6 +143,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
                         return;
                     }
                     currentPage = Math.max(0, Math.min(targetPage, pages.size() - 1));
+                    ReadingRecord.saveRecord(frame, novelView.getLabel(), filePath, currentPage, pages.size());
                     showPage();
                 } catch (Exception ex) {
                     currentPage = 0;
@@ -195,8 +199,8 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         if (novelView != null && novelView.isVisible()) {
             if (e.getButton() == MouseEvent.BUTTON3) {
                 // 右键保存记录并返回主页
-                ReadingRecord.saveRecord(frame, novelView.getLabel(), filePath, currentPage);
-                readingData = ReadingRecord.loadRecord(frame);
+                saveCurrentRecord();
+                refreshReadingData();
                 novelView.hide();
                 homeView.updateNovelList(readingData);  // 更新列表
                 homeView.show();
@@ -224,6 +228,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         }
         currentPage = Math.max(0, Math.min(currentPage, pages.size() - 1));
         showPage();
+        scheduleSaveCurrentRecord();
     }
 
     @Override
@@ -239,9 +244,31 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
     }
 
     private void saveCurrentRecord() {
-        if (novelView != null && novelView.isVisible()) {
-            ReadingRecord.saveRecord(frame, novelView.getLabel(), filePath, currentPage);
+        if (saveTimer != null) {
+            saveTimer.stop();
         }
+        saveCurrentRecordNow();
+    }
+
+    private void scheduleSaveCurrentRecord() {
+        if (novelView == null || !novelView.isVisible()) {
+            return;
+        }
+        if (saveTimer == null) {
+            saveTimer = new Timer(SAVE_DEBOUNCE_DELAY_MS, e -> saveCurrentRecordNow());
+            saveTimer.setRepeats(false);
+        }
+        saveTimer.restart();
+    }
+
+    private void saveCurrentRecordNow() {
+        if (novelView != null && novelView.isVisible()) {
+            ReadingRecord.saveRecord(frame, novelView.getLabel(), filePath, currentPage, pages.size());
+        }
+    }
+
+    private void refreshReadingData() {
+        readingData = ReadingRecord.loadRecord(frame);
     }
 
     private void showChapters() {
@@ -251,6 +278,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         new ChapterDialog(frame, chapters, novelView.getLabel().getFont(), pages.size(), currentPage, pageIndex -> {
             currentPage = Math.max(0, Math.min(pageIndex, pages.size() - 1));
             showPage();
+            saveCurrentRecord();
         }).show();
     }
 
