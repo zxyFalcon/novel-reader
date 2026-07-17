@@ -32,11 +32,6 @@ public class ChapterDialog {
     }
 
     public void show() {
-        if (chapters.isEmpty()) {
-            JOptionPane.showMessageDialog(frame, "未识别到目录", "目录", JOptionPane.INFORMATION_MESSAGE);
-            return;
-        }
-
         DefaultListModel<Chapter> listModel = new DefaultListModel<>();
         chapters.forEach(listModel::addElement);
 
@@ -53,6 +48,14 @@ public class ChapterDialog {
         JScrollPane scrollPane = new JScrollPane(chapterList);
         scrollPane.setPreferredSize(new Dimension(Math.min(520, Math.max(320, frame.getWidth() - 120)),
                 Math.min(520, Math.max(260, frame.getHeight() - 120))));
+        JLabel emptyChapterLabel = new JLabel("未识别到目录", SwingConstants.CENTER);
+        emptyChapterLabel.setFont(font.deriveFont(Font.PLAIN, font.getSize()));
+        emptyChapterLabel.setForeground(Color.GRAY);
+        emptyChapterLabel.setOpaque(true);
+        emptyChapterLabel.setBackground(chapterList.getBackground());
+        if (chapters.isEmpty()) {
+            scrollPane.setViewportView(emptyChapterLabel);
+        }
 
         JButton jumpButton = new JButton("跳转");
         JButton cancelButton = new JButton("取消");
@@ -62,7 +65,7 @@ public class ChapterDialog {
         chapterList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 Chapter chapter = chapterList.getSelectedValue();
-                if (chapter != null) {
+                if (chapter != null && !chapters.isEmpty()) {
                     pageField.setText(String.valueOf(chapter.getPageIndex() + 1));
                 }
             }
@@ -76,7 +79,7 @@ public class ChapterDialog {
             public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2) {
                     Chapter chapter = chapterList.getSelectedValue();
-                    if (chapter != null) {
+                    if (chapter != null && !chapters.isEmpty()) {
                         pageField.setText(String.valueOf(chapter.getPageIndex() + 1));
                     }
                     jumpToPage(pageField, dialog);
