@@ -41,6 +41,19 @@ public class ReadingRecord {
      * @param currentPage 当前阅读的页码（或滚动位置）
      */
     public static void saveRecord(JFrame frame, JLabel label, String filePath, int currentPage) {
+        saveRecord(frame, label, filePath, currentPage, null);
+    }
+
+    /**
+     * 保存当前阅读状态及小说进度
+     *
+     * @param frame       主窗口，用于获取窗口大小和位置
+     * @param label       内容显示标签，用于获取字体和前景色
+     * @param filePath    当前阅读的小说文件路径，作为记录的唯一标识
+     * @param currentPage 当前阅读的页码（或滚动位置）
+     * @param totalPages  当前分页结果的总页数
+     */
+    public static void saveRecord(JFrame frame, JLabel label, String filePath, int currentPage, Integer totalPages) {
         Path path = Paths.get(BOOKMARK_FILE);
 
         // 仅当文件路径不为空时才执行保存操作
@@ -78,6 +91,9 @@ public class ReadingRecord {
                         if (novel.containsKey("filePath") && filePath.equals(novel.getStr("filePath"))) {
                             // 找到已有记录，更新页码和最后阅读时间
                             novel.set("currentPage", currentPage);
+                            if (totalPages != null && totalPages > 0) {
+                                novel.set("totalPages", totalPages);
+                            }
                             novel.set("lastReadingTime", LocalDateTime.now());
                             flag = false; // 标记为已更新，无需新增
                             break;
@@ -91,6 +107,9 @@ public class ReadingRecord {
                 JSONObject currentNovel = new JSONObject();
                 currentNovel.set("filePath", filePath);
                 currentNovel.set("currentPage", currentPage);
+                if (totalPages != null && totalPages > 0) {
+                    currentNovel.set("totalPages", totalPages);
+                }
                 currentNovel.set("lastReadingTime", LocalDateTime.now());
                 novelArray.add(currentNovel);
             }
@@ -176,6 +195,54 @@ public class ReadingRecord {
                 ex.printStackTrace();
                 JOptionPane.showMessageDialog(frame, "删除记录失败: " + ex.getMessage());
             }
+        }
+    }
+
+    /**
+     * 重新定位指定小说记录的文件路径，保留页码、时间和分页信息等阅读进度。
+     *
+     * @param frame       主窗口，用于显示错误提示
+     * @param oldFilePath 原小说文件路径
+     * @param newFilePath 新小说文件路径
+     * @return 是否成功更新记录
+     */
+    public static boolean relocateRecord(JFrame frame, String oldFilePath, String newFilePath) {
+        if (StrUtil.isBlank(oldFilePath) || StrUtil.isBlank(newFilePath)) {
+            return false;
+        }
+
+        Path path = Paths.get(BOOKMARK_FILE);
+        if (!Files.exists(path)) {
+            return false;
+        }
+
+        try {
+            JSONObject jsonObject = readJson(path);
+            JSONArray novelArray = jsonObject.containsKey("novels") ? jsonObject.getJSONArray("novels") : new JSONArray();
+            boolean updated = false;
+
+            for (int i = 0; i < novelArray.size(); i++) {
+                JSONObject novel = novelArray.getJSONObject(i);
+                if (oldFilePath.equals(novel.getStr("filePath"))) {
+                    novel.set("filePath", newFilePath);
+                    updated = true;
+                    break;
+                }
+            }
+
+            if (!updated) {
+                return false;
+            }
+
+            jsonObject.set("novels", novelArray);
+            try (Writer file = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
+                file.write(jsonObject.toString());
+            }
+            return true;
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(frame, "重新定位文件失败: " + ex.getMessage());
+            return false;
         }
     }
 

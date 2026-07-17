@@ -14,5 +14,6 @@ import java.time.LocalDateTime;
 public class NovelRecord {
     private String filePath;
     private Integer currentPage;
+    private Integer totalPages;
     private LocalDateTime lastReadingTime;
 }
