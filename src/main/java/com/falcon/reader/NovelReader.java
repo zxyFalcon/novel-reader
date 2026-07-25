@@ -13,6 +13,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.prefs.Preferences;
 
 /**
  * 主控制器类，处理窗口初始化和事件
@@ -22,6 +23,7 @@ import java.util.List;
  */
 public class NovelReader implements MouseListener, MouseMotionListener, MouseWheelListener {
     private static final int SAVE_DEBOUNCE_DELAY_MS = 1000;
+    private static final String GUIDE_SHOWN_KEY = "operationGuideShown";
 
     private int x, y;
     private JFrame frame;
@@ -76,6 +78,26 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         homeView.show();
 
         frame.setVisible(true);
+        showOperationGuideOnFirstLaunch();
+    }
+
+    private void showOperationGuideOnFirstLaunch() {
+        Preferences preferences = Preferences.userNodeForPackage(NovelReader.class);
+        if (preferences.getBoolean(GUIDE_SHOWN_KEY, false)) {
+            return;
+        }
+
+        SwingUtilities.invokeLater(() -> {
+            String guide = "<html><div style='width: 320px'>"
+                    + "<h3>欢迎使用小说阅读器</h3>"
+                    + "<p>1. 点击左上角“打开”，选择 TXT 书籍。</p>"
+                    + "<p>2. 在书架中左键点击书籍开始阅读，右键可管理记录。</p>"
+                    + "<p>3. 阅读时滚动鼠标翻页，右键返回书架。</p>"
+                    + "<p>4. 使用首页右上角菜单进行排序、筛选和阅读设置。</p>"
+                    + "</div></html>";
+            JOptionPane.showMessageDialog(frame, guide, "操作指南", JOptionPane.INFORMATION_MESSAGE);
+            preferences.putBoolean(GUIDE_SHOWN_KEY, true);
+        });
     }
 
     /**

@@ -182,7 +182,7 @@ public class HomeView {
             records.forEach(entry -> listModel.addElement(new NovelItem(entry.getKey(), entry.getValue())));
         }
 
-        if ((isSearchActive() || groupMode != GroupMode.ALL) && listModel.isEmpty()) {
+        if (listModel.isEmpty()) {
             emptyResultLabel = createEmptyResultLabel();
             updateBounds();
             frame.add(emptyResultLabel);
@@ -276,6 +276,9 @@ public class HomeView {
     private String getEmptyResultText() {
         if (isSearchActive()) {
             return "没有匹配的书籍";
+        }
+        if (CollectionUtil.isEmpty(readingData.getRecords())) {
+            return "书架还是空的，点击左上角“打开”添加书籍";
         }
         return "当前筛选项下没有书籍";
     }
