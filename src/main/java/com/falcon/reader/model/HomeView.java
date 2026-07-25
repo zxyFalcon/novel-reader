@@ -91,12 +91,12 @@ public class HomeView {
         openButton.addActionListener(e -> {
             // 创建文件选择器，设置默认目录和文件过滤器
             JFileChooser fileChooser = new JFileChooser(".");
-            fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("文本文件 (*.txt)", "txt"));
+            fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("书籍文件 (*.txt, *.epub)", "txt", "epub"));
             // 显示文件选择对话框
             if (fileChooser.showOpenDialog(frame) == JFileChooser.APPROVE_OPTION) {
                 String selectedPath = fileChooser.getSelectedFile().getAbsolutePath();
-                // 检查文件路径是否有效且为txt格式
-                if (StrUtil.isNotBlank(selectedPath) && selectedPath.toLowerCase().endsWith(".txt")) {
+                // 检查文件路径是否有效且为支持的书籍格式
+                if (isSupportedBook(selectedPath)) {
                     openNovelCallback.accept(selectedPath);
                 } else {
                     // 显示错误消息
@@ -259,6 +259,14 @@ public class HomeView {
         Path path = Paths.get(filePath);
         String fileName = path.getFileName() == null ? filePath : path.getFileName().toString();
         return fileName.toLowerCase(Locale.ROOT).contains(keyword) || normalizedPath.contains(keyword);
+    }
+
+    private boolean isSupportedBook(String path) {
+        if (StrUtil.isBlank(path)) {
+            return false;
+        }
+        String lowerPath = path.toLowerCase(Locale.ROOT);
+        return lowerPath.endsWith(".txt") || lowerPath.endsWith(".epub");
     }
 
     private boolean isSearchActive() {
@@ -729,14 +737,14 @@ public class HomeView {
 
     private void relocateNovel(NovelItem item) {
         JFileChooser fileChooser = new JFileChooser(".");
-        fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("文本文件 (*.txt)", "txt"));
+        fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("书籍文件 (*.txt, *.epub)", "txt", "epub"));
         if (fileChooser.showOpenDialog(frame) != JFileChooser.APPROVE_OPTION) {
             return;
         }
 
         String oldPath = item.getFullPath();
         String newPath = fileChooser.getSelectedFile().getAbsolutePath();
-        if (StrUtil.isBlank(newPath) || !newPath.toLowerCase().endsWith(".txt")) {
+        if (!isSupportedBook(newPath)) {
             JOptionPane.showMessageDialog(frame, "无效的文件！", "错误", JOptionPane.ERROR_MESSAGE);
             return;
         }
