@@ -1,20 +1,19 @@
-package com.falcon.reader.model;
-
-import com.falcon.reader.entity.NovelConfig;
-import com.falcon.reader.entity.NovelRecord;
+package com.falcon.reader.domain;
 
 import java.util.Map;
 
 /**
- * Snapshot of reader settings and saved novel records.
+ * Loaded reader settings, window state and saved novel records.
  */
 public class ReadingData {
     private final NovelConfig config;
     private final Map<String, NovelRecord> records;
+    private final WindowState windowState;
 
-    public ReadingData(NovelConfig config, Map<String, NovelRecord> records) {
+    public ReadingData(NovelConfig config, Map<String, NovelRecord> records, WindowState windowState) {
         this.config = config;
         this.records = records;
+        this.windowState = windowState;
     }
 
     public NovelConfig getConfig() {
@@ -23,5 +22,9 @@ public class ReadingData {
 
     public Map<String, NovelRecord> getRecords() {
         return records;
+    }
+
+    public WindowState getWindowState() {
+        return windowState;
     }
 }

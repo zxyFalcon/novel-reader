@@ -1,6 +1,6 @@
-package com.falcon.reader.model;
+package com.falcon.reader.pagination;
 
-import com.falcon.reader.entity.Chapter;
+import com.falcon.reader.domain.Chapter;
 
 import java.util.List;
 
@@ -12,10 +12,6 @@ public class PageResult {
     private final List<Chapter> chapters;
     private final List<Integer> pageStartOffsets;
     private final int totalLength;
-
-    public PageResult(List<String> pages, List<Chapter> chapters) {
-        this(pages, chapters, new java.util.ArrayList<>(), 0);
-    }
 
     public PageResult(List<String> pages, List<Chapter> chapters, List<Integer> pageStartOffsets, int totalLength) {
         this.pages = pages;

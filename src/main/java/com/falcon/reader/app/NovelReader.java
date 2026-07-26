@@ -1,15 +1,25 @@
-package com.falcon.reader;
+package com.falcon.reader.app;
 
-import com.falcon.reader.entity.Chapter;
-import com.falcon.reader.entity.NovelRecord;
-import com.falcon.reader.model.*;
+import com.falcon.reader.domain.Chapter;
+import com.falcon.reader.domain.NovelRecord;
+import com.falcon.reader.domain.ReadingData;
+import com.falcon.reader.domain.WindowState;
+import com.falcon.reader.epub.EpubBook;
+import com.falcon.reader.epub.EpubParser;
+import com.falcon.reader.pagination.PageCalculator;
+import com.falcon.reader.pagination.PageResult;
+import com.falcon.reader.persistence.ReadingRecordRepository;
+import com.falcon.reader.ui.dialog.ChapterDialog;
+import com.falcon.reader.ui.dialog.SettingsDialog;
+import com.falcon.reader.ui.view.HomeView;
+import com.falcon.reader.ui.view.NovelView;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.io.IOException;
 import java.io.File;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
@@ -36,7 +46,9 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
     private List<Chapter> chapters = new ArrayList<>();
     private int totalLength = 0;
     private ReadingData readingData;
-    private HomeView homeView;
+    private final ReadingRecordRepository recordRepository = new ReadingRecordRepository(
+            message -> JOptionPane.showMessageDialog(frame, message, "错误", JOptionPane.ERROR_MESSAGE));
+    private final HomeView homeView;
     private NovelView novelView;
     private SwingWorker<PageResult, Void> pageWorker;
     private SwingWorker<EpubBook, Void> epubWorker;
@@ -75,10 +87,11 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         });
 
         // 加载阅读记录
-        readingData = ReadingRecord.loadRecord(frame);
+        readingData = recordRepository.loadRecord();
+        applyWindowState(readingData.getWindowState());
         // 初始化主页视图
         homeView = new HomeView(frame, this::openNovel, this::saveAndExit, readingData, data -> readingData = data,
-                this::showSettings);
+                this::showSettings, recordRepository);
         homeView.show();
 
         frame.setVisible(true);
@@ -147,7 +160,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
             protected EpubBook doInBackground() throws Exception {
                 EpubBook parsed = EpubParser.parse(targetFilePath);
                 if (isCancelled()) {
-                    EpubParser.deleteRecursively(parsed.getExtractedDirectory());
+                    parsed.close();
                 }
                 return parsed;
             }
@@ -198,10 +211,6 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         if (currentPage >= 0 && currentPage < pages.size()) {
             novelView.getLabel().setText(pages.get(currentPage));
         }
-    }
-
-    private void loadPagesAsync(String targetFilePath, int targetPage) {
-        loadPagesAsync(targetFilePath, targetPage, null);
     }
 
     private void loadPagesAsync(String targetFilePath, int targetPage, Integer targetOffset) {
@@ -280,7 +289,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
                         novelView.updateBounds(changes.width, changes.height);
                         novelView.updateReadingStyle(newFont, changes.color);
                     }
-                    ReadingRecord.saveConfig(frame, settingsLabel);
+                    recordRepository.saveConfig(currentWindowState(), readingData.getConfig());
                     refreshReadingData();
                     if (readingVisible) {
                         loadPagesAsync(filePath, currentPage, getCurrentOffset());
@@ -384,7 +393,8 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         if (novelView != null && novelView.isVisible()) {
             int offset = novelView.isEpubMode() ? novelView.getEpubPageIndex() : getCurrentOffset();
             int length = novelView.isEpubMode() ? novelView.getEpubPageCount() : totalLength;
-            ReadingRecord.saveRecord(frame, novelView.getLabel(), filePath, currentPage, pages.size(), offset, length);
+            recordRepository.saveRecord(currentWindowState(), readingData.getConfig(), filePath, currentPage,
+                    pages.size(), offset, length);
         }
     }
 
@@ -413,7 +423,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
     }
 
     private void refreshReadingData() {
-        readingData = ReadingRecord.loadRecord(frame);
+        readingData = recordRepository.loadRecord();
     }
 
     private void showChapters() {
@@ -512,7 +522,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
 
     private void releaseEpubBook() {
         if (epubBook != null) {
-            EpubParser.deleteRecursively(epubBook.getExtractedDirectory());
+            epubBook.close();
             epubBook = null;
         }
     }
@@ -540,6 +550,18 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         } catch (IOException e) {
             frame.setIconImage(Toolkit.getDefaultToolkit().getImage(iconUrl));
         }
+    }
+
+    private WindowState currentWindowState() {
+        return new WindowState(frame.getWidth(), frame.getHeight(), frame.getX(), frame.getY());
+    }
+
+    private void applyWindowState(WindowState windowState) {
+        if (windowState == null) {
+            return;
+        }
+        frame.setSize(windowState.getWidth(), windowState.getHeight());
+        frame.setLocation(windowState.getLocationX(), windowState.getLocationY());
     }
 
     public static void main(String[] args) {

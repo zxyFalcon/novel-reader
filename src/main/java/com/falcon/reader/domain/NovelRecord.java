@@ -1,4 +1,4 @@
-package com.falcon.reader.entity;
+package com.falcon.reader.domain;
 
 import lombok.Data;
 

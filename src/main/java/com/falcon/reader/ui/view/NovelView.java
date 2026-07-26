@@ -1,31 +1,24 @@
-package com.falcon.reader.model;
+package com.falcon.reader.ui.view;
 
-import com.falcon.reader.entity.NovelConfig;
+import com.falcon.reader.domain.NovelConfig;
+import com.falcon.reader.epub.EpubHtmlProcessor;
+
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.event.HyperlinkEvent;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Element;
 import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
-import javax.swing.text.Element;
-import javax.swing.text.BadLocationException;
-import javax.imageio.ImageIO;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseMotionAdapter;
-import java.awt.event.MouseWheelEvent;
-import java.awt.event.ComponentAdapter;
-import java.awt.event.ComponentEvent;
+import java.awt.event.*;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.StringReader;
 import java.net.URL;
 import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.awt.image.BufferedImage;
 import java.util.function.Consumer;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -36,30 +29,14 @@ import java.util.regex.Pattern;
  * @date 2026/2/11 16:18
  **/
 public class NovelView {
-    private static final Pattern NOTE_BLOCK_PATTERN = Pattern.compile(
-            "<(aside|li|ol|div|section|p|footer)\\b([^>]*(?:epub:type\\s*=\\s*(['\"])[^'\"]*(?:footnote|endnote)[^'\"]*\\3"
-                    + "|role\\s*=\\s*(['\"])[^'\"]*(?:doc-footnote|doc-endnote)[^'\"]*\\4"
-                    + "|class\\s*=\\s*(['\"])[^'\"]*(?:footnotes?|endnotes?)[^'\"]*\\5)[^>]*)>"
-                    + "(.*?)</\\1\\s*>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-    private static final Pattern ID_ELEMENT_PATTERN = Pattern.compile(
-            "<([a-z][\\w:-]*)\\b([^>]*\\bid\\s*=\\s*(['\"])([^'\"]+)\\3[^>]*)>(.*?)</\\1\\s*>",
-            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-    private static final Pattern ID_ATTRIBUTE_PATTERN = Pattern.compile(
-            "\\bid\\s*=\\s*(['\"])([^'\"]+)\\1", Pattern.CASE_INSENSITIVE);
-    private static final Pattern ANCHOR_PATTERN = Pattern.compile("<a\\b([^>]*)>",
-            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-    private static final Pattern HREF_ATTRIBUTE_PATTERN = Pattern.compile(
-            "\\bhref\\s*=\\s*(['\"])([^'\"]+)\\1", Pattern.CASE_INSENSITIVE);
-    private static final Pattern NOTE_REFERENCE_HINT_PATTERN = Pattern.compile(
-            "(?i)(?:epub:type|role|class)\\s*=\\s*(['\"])[^'\"]*(?:noteref|footnote|endnote)[^'\"]*\\1");
     private static final Pattern IMG_TAG_PATTERN = Pattern.compile("<img\\b[^>]*>",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern SRC_ATTRIBUTE_PATTERN = Pattern.compile(
             "\\bsrc\\s*=\\s*(['\"])([^'\"]+)\\1", Pattern.CASE_INSENSITIVE);
-    private JFrame frame;
-    private JLabel label;
-    private JEditorPane epubPane;
-    private JScrollPane epubScrollPane;
+    private final JFrame frame;
+    private final JLabel label;
+    private final JEditorPane epubPane;
+    private final JScrollPane epubScrollPane;
     private boolean visible = false;
     private boolean epubMode = false;
     private Consumer<URL> hyperlinkCallback;
@@ -74,7 +51,7 @@ public class NovelView {
     private Point frameDragStart;
     private boolean epubWasDragged;
     private boolean footnoteDismissedByPress;
-    private final Map<String, String> currentFootnotes = new HashMap<>();
+    private final EpubHtmlProcessor htmlProcessor = new EpubHtmlProcessor();
     private FootnoteBubble footnoteBubble;
     private int epubPageIndex;
     private int epubPageCount = 1;
@@ -358,7 +335,7 @@ public class NovelView {
         document.putProperty("IgnoreCharsetDirective", Boolean.TRUE);
         try (InputStream input = section.openStream()) {
             try {
-                kit.read(new StringReader(resizeImages(sanitizeXhtml(readUtf8(input)))), document, 0);
+                kit.read(new StringReader(resizeImages(htmlProcessor.readAndProcess(input))), document, 0);
             } catch (javax.swing.text.BadLocationException ex) {
                 throw new IOException("EPUB 章节内容无效", ex);
             }
@@ -471,40 +448,6 @@ public class NovelView {
         return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
-    private String readUtf8(InputStream input) throws IOException {
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        byte[] buffer = new byte[8192];
-        int count;
-        while ((count = input.read(buffer)) >= 0) {
-            output.write(buffer, 0, count);
-        }
-        byte[] bytes = output.toByteArray();
-        int offset = bytes.length >= 3 && (bytes[0] & 0xff) == 0xef && (bytes[1] & 0xff) == 0xbb
-                && (bytes[2] & 0xff) == 0xbf ? 3 : 0;
-        return new String(bytes, offset, bytes.length - offset, StandardCharsets.UTF_8);
-    }
-
-    private String sanitizeXhtml(String xhtml) {
-        currentFootnotes.clear();
-        String html = xhtml.replaceFirst("(?is)^\\s*<\\?xml\\s+[^?]*\\?>", "");
-        html = html.replaceFirst("(?is)^\\s*<!DOCTYPE[^>]*>", "");
-
-        // Swing HTML does not render inline SVG. Many EPUB covers use SVG only
-        // as a wrapper around a raster image, so preserve that image as HTML.
-        html = html.replaceAll("(?is)<svg(?:\\:[a-z0-9_-]+)?\\b[^>]*>", "");
-        html = html.replaceAll("(?is)</svg(?:\\:[a-z0-9_-]+)?>", "");
-        html = html.replaceAll("(?is)<(?:svg:)?image\\b", "<img");
-        html = html.replaceAll("(?i)\\bxlink:href\\s*=", "src=");
-        html = html.replaceAll("(?is)(<img\\b[^>]*?)\\bhref\\s*=", "$1src=");
-
-        // The application window is intentionally translucent. EPUB styles
-        // often force a white page/background, which would hide that effect.
-        html = html.replaceAll("(?i)\\sbgcolor\\s*=\\s*(['\"]).*?\\1", "");
-        html = html.replaceAll("(?i)background(?:-color)?\\s*:\\s*[^;}]+;?", "");
-        html = extractReferencedFootnotes(html, currentFootnotes);
-        return extractAndRemoveFootnotes(html, currentFootnotes);
-    }
-
     private String resizeImages(String html) {
         int viewportWidth = epubScrollPane.getViewport().getExtentSize().width;
         int maxWidth = Math.max(80, (viewportWidth > 0 ? viewportWidth : frame.getWidth()) - 28);
@@ -578,7 +521,7 @@ public class NovelView {
         if (requestedPage != null) {
             epubPageIndex = Math.max(0, Math.min(requestedPage, epubPageCount - 1));
         } else if (reference != null && !reference.isEmpty()) {
-            Element target = findElementById(((HTMLDocument) epubPane.getDocument()).getDefaultRootElement(), reference);
+            Element target = findElementById(epubPane.getDocument().getDefaultRootElement(), reference);
             if (target != null) {
                 try {
                     Rectangle bounds = epubPane.modelToView(target.getStartOffset());
@@ -649,10 +592,10 @@ public class NovelView {
         }
         try {
             String id = URLDecoder.decode(description.substring(description.indexOf('#') + 1), "UTF-8");
-            String extractedNote = currentFootnotes.get(id);
+            String extractedNote = htmlProcessor.getFootnote(id);
             if ((extractedNote == null || extractedNote.isEmpty())) {
                 URL target = resolveHyperlink(event);
-                extractedNote = loadLinkedFootnote(target, id);
+                extractedNote = htmlProcessor.loadLinkedFootnote(target, id);
             }
             if (extractedNote != null && !extractedNote.isEmpty()) {
                 showFootnoteBubble(extractedNote, event);
@@ -678,93 +621,6 @@ public class NovelView {
         }
     }
 
-    private String extractAndRemoveFootnotes(String html, Map<String, String> footnotes) {
-        Matcher matcher = NOTE_BLOCK_PATTERN.matcher(html);
-        StringBuffer visibleHtml = new StringBuffer();
-        while (matcher.find()) {
-            String wholeBlock = matcher.group(0);
-            String innerHtml = matcher.group(6);
-            Matcher idMatcher = ID_ATTRIBUTE_PATTERN.matcher(wholeBlock.substring(0, wholeBlock.indexOf('>') + 1));
-            if (idMatcher.find()) {
-                storeFootnote(footnotes, idMatcher.group(2), innerHtml);
-            }
-
-            Matcher nestedMatcher = ID_ELEMENT_PATTERN.matcher(innerHtml);
-            while (nestedMatcher.find()) {
-                storeFootnote(footnotes, nestedMatcher.group(4), nestedMatcher.group(5));
-            }
-            // Some books put the target id on an empty <a> before the note
-            // paragraph. Associate those ids with the containing note block.
-            Matcher nestedIdMatcher = ID_ATTRIBUTE_PATTERN.matcher(innerHtml);
-            while (nestedIdMatcher.find()) {
-                storeFootnote(footnotes, nestedIdMatcher.group(2), innerHtml);
-            }
-            matcher.appendReplacement(visibleHtml, Matcher.quoteReplacement(wholeBlock));
-        }
-        matcher.appendTail(visibleHtml);
-        return visibleHtml.toString();
-    }
-
-    private String extractReferencedFootnotes(String html, Map<String, String> footnotes) {
-        java.util.Set<String> referencedIds = new java.util.LinkedHashSet<>();
-        Matcher anchorMatcher = ANCHOR_PATTERN.matcher(html);
-        while (anchorMatcher.find()) {
-            Matcher hrefMatcher = HREF_ATTRIBUTE_PATTERN.matcher(anchorMatcher.group(1));
-            if (!hrefMatcher.find() || !hrefMatcher.group(2).startsWith("#")) {
-                continue;
-            }
-            String id;
-            try {
-                id = URLDecoder.decode(hrefMatcher.group(2).substring(1), "UTF-8");
-            } catch (Exception ignored) {
-                id = hrefMatcher.group(2).substring(1);
-            }
-            boolean explicitNoteLink = NOTE_REFERENCE_HINT_PATTERN.matcher(anchorMatcher.group(1)).find();
-            boolean noteLikeId = id.toLowerCase(java.util.Locale.ROOT)
-                    .matches(".*(?:footnote|endnote|note[-_]?\\d+|fn[-_]?\\d+).*");
-            if (!explicitNoteLink && !noteLikeId) {
-                continue;
-            }
-            Pattern targetIdPattern = Pattern.compile(
-                    "\\bid\\s*=\\s*(['\"])" + Pattern.quote(id) + "\\1", Pattern.CASE_INSENSITIVE);
-            Matcher targetIdMatcher = targetIdPattern.matcher(html);
-            // A note reference points forward to the note block. Backlinks in
-            // that block point to an earlier marker and must not remove it.
-            if (targetIdMatcher.find() && targetIdMatcher.start() > anchorMatcher.end()) {
-                referencedIds.add(id);
-            }
-        }
-
-        String visibleHtml = html;
-        for (String id : referencedIds) {
-            if (id.isEmpty()) {
-                continue;
-            }
-            String quotedId = Pattern.quote(id);
-            // Some EPUBs use an empty anchor as the target and put the note in
-            // the immediately following paragraph/division.
-            Pattern adjacentPattern = Pattern.compile(
-                    "<a\\b[^>]*\\bid\\s*=\\s*(['\"])" + quotedId
-                            + "\\1[^>]*>\\s*</a>\\s*<(p|div|li)\\b[^>]*>(.*?)</\\2\\s*>",
-                    Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-            Matcher adjacentMatcher = adjacentPattern.matcher(visibleHtml);
-            if (adjacentMatcher.find()) {
-                storeFootnote(footnotes, id, adjacentMatcher.group(3));
-                continue;
-            }
-
-            Pattern targetPattern = Pattern.compile(
-                    "<([a-z][\\w:-]*)\\b[^>]*\\bid\\s*=\\s*(['\"])" + quotedId
-                            + "\\2[^>]*>(.*?)</\\1\\s*>",
-                    Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-            Matcher targetMatcher = targetPattern.matcher(visibleHtml);
-            if (targetMatcher.find()) {
-                storeFootnote(footnotes, id, targetMatcher.group(3));
-            }
-        }
-        return visibleHtml;
-    }
-
     private Element findElementById(Element element, String id) {
         Object htmlId = element.getAttributes().getAttribute(javax.swing.text.html.HTML.Attribute.ID);
         Object rawId = element.getAttributes().getAttribute("id");
@@ -778,52 +634,6 @@ public class NovelView {
             }
         }
         return null;
-    }
-
-    private void storeFootnote(Map<String, String> footnotes, String id, String noteHtml) {
-        String text = toPlainText(noteHtml);
-        if (!id.isEmpty() && !text.isEmpty()) {
-            footnotes.put(id, text);
-        }
-    }
-
-    private String toPlainText(String noteHtml) {
-        return noteHtml
-                .replaceAll("(?is)<a\\b[^>]*(?:backlink|backref)[^>]*>.*?</a>", " ")
-                .replaceAll("(?is)<[^>]+>", " ")
-                .replace("&nbsp;", " ")
-                .replace("&#160;", " ")
-                .replace("&lt;", "<")
-                .replace("&gt;", ">")
-                .replace("&amp;", "&")
-                .replaceAll("\\s+", " ")
-                .trim();
-    }
-
-    private String loadLinkedFootnote(URL target, String id) {
-        if (target == null || id == null || id.isEmpty() || !"file".equalsIgnoreCase(target.getProtocol())) {
-            return null;
-        }
-        try (InputStream input = target.openStream()) {
-            Map<String, String> linkedFootnotes = new HashMap<>();
-            String xhtml = readUtf8(input)
-                    .replaceFirst("(?is)^\\s*<\\?xml\\s+[^?]*\\?>", "")
-                    .replaceFirst("(?is)^\\s*<!DOCTYPE[^>]*>", "");
-            extractAndRemoveFootnotes(xhtml, linkedFootnotes);
-            String note = linkedFootnotes.get(id);
-            if (note != null && !note.isEmpty()) {
-                return note;
-            }
-
-            Pattern targetPattern = Pattern.compile(
-                    "<([a-z][\\w:-]*)\\b[^>]*\\bid\\s*=\\s*(['\"])" + Pattern.quote(id)
-                            + "\\2[^>]*>(.*?)</\\1\\s*>",
-                    Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-            Matcher targetMatcher = targetPattern.matcher(xhtml);
-            return targetMatcher.find() ? toPlainText(targetMatcher.group(3)) : null;
-        } catch (IOException ignored) {
-            return null;
-        }
     }
 
     private void showFootnoteBubble(String text, HyperlinkEvent event) {
@@ -882,6 +692,7 @@ public class NovelView {
     }
 
     private final class FootnoteBubble extends JComponent {
+        private static final long serialVersionUID = 1L;
         private static final int PADDING = 12;
         private static final int ARROW_HEIGHT = 12;
         private static final int ARC = 18;

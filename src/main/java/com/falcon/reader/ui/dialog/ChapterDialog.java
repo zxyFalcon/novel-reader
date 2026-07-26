@@ -1,6 +1,6 @@
-package com.falcon.reader.model;
+package com.falcon.reader.ui.dialog;
 
-import com.falcon.reader.entity.Chapter;
+import com.falcon.reader.domain.Chapter;
 import com.falcon.reader.util.NumericDocumentFilter;
 
 import javax.swing.*;

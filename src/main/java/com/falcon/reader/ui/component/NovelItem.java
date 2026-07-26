@@ -1,6 +1,6 @@
-package com.falcon.reader.entity.novelItem;
+package com.falcon.reader.ui.component;
 
-import com.falcon.reader.entity.NovelRecord;
+import com.falcon.reader.domain.NovelRecord;
 import lombok.Data;
 
 import java.io.File;
@@ -25,17 +25,13 @@ public class NovelItem {
     private Integer totalLength;
     private boolean fileExists;
 
-    public NovelItem(String filePath){
-        this(filePath, null);
-    }
-
     public NovelItem(String filePath, NovelRecord record){
         Path path = Paths.get(filePath);
         Path parent = path.getParent();
 
         this.fullPath = filePath;
         this.fileName = path.getFileName() == null ? filePath : path.getFileName().toString();
-        this.filePath = parent == null ? "" : parent.toString() + File.separator;
+        this.filePath = parent == null ? "" : parent + File.separator;
         this.fileExists = Files.isRegularFile(path);
         if (record != null) {
             this.currentPage = record.getCurrentPage();
