@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collections;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -120,8 +121,8 @@ public final class EpubHtmlProcessor {
         return process(readUtf8(input));
     }
 
-    private String process(String xhtml) {
-        footnotes.clear();
+    private ProcessedContent processContent(String xhtml) {
+        Map<String, String> parsedFootnotes = new HashMap<>();
         String html = stripDocumentHeader(xhtml);
         html = html.replaceAll("(?is)<svg(?:\\:[a-z0-9_-]+)?\\b[^>]*>", "")
                 .replaceAll("(?is)</svg(?:\\:[a-z0-9_-]+)?>", "")
@@ -130,9 +131,24 @@ public final class EpubHtmlProcessor {
                 .replaceAll("(?is)(<img\\b[^>]*?)\\bhref\\s*=", "$1src=")
                 .replaceAll("(?i)\\sbgcolor\\s*=\\s*(['\"]).*?\\1", "")
                 .replaceAll("(?i)background(?:-color)?\\s*:\\s*[^;}]+;?", "");
-        collectReferencedNotes(html, footnotes);
-        collectNoteBlocks(html, footnotes);
-        return html;
+        collectReferencedNotes(html, parsedFootnotes);
+        collectNoteBlocks(html, parsedFootnotes);
+        return new ProcessedContent(html, parsedFootnotes);
+    }
+
+    private String process(String xhtml) {
+        ProcessedContent content = processContent(xhtml);
+        use(content);
+        return content.getHtml();
+    }
+
+    public ProcessedContent readProcessed(InputStream input) throws IOException {
+        return processContent(readUtf8(input));
+    }
+
+    public void use(ProcessedContent content) {
+        footnotes.clear();
+        footnotes.putAll(content.getFootnotes());
     }
 
     public String getFootnote(String id) {
@@ -140,7 +156,9 @@ public final class EpubHtmlProcessor {
     }
 
     public String loadLinkedFootnote(URL target, String id) {
-        if (target == null || id == null || id.isEmpty() || !"file".equalsIgnoreCase(target.getProtocol())) return null;
+        if (target == null || id == null || id.isEmpty()
+                || !("file".equalsIgnoreCase(target.getProtocol())
+                || "epub".equalsIgnoreCase(target.getProtocol()))) return null;
         try (InputStream input = target.openStream()) {
             String xhtml = stripDocumentHeader(readUtf8(input));
             Map<String, String> linked = new HashMap<>();
@@ -152,6 +170,24 @@ public final class EpubHtmlProcessor {
             return matcher.find() ? plainText(matcher.group(3)) : null;
         } catch (IOException ignored) {
             return null;
+        }
+    }
+
+    public static final class ProcessedContent {
+        private final String html;
+        private final Map<String, String> footnotes;
+
+        private ProcessedContent(String html, Map<String, String> footnotes) {
+            this.html = html;
+            this.footnotes = Collections.unmodifiableMap(new HashMap<>(footnotes));
+        }
+
+        public String getHtml() {
+            return html;
+        }
+
+        public Map<String, String> getFootnotes() {
+            return footnotes;
         }
     }
 }

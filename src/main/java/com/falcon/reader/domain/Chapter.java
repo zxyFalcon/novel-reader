@@ -1,5 +1,7 @@
 package com.falcon.reader.domain;
 
+import java.net.URL;
+
 /**
  * Chapter entry detected from the original novel text.
  */
@@ -7,11 +9,17 @@ public class Chapter {
     private final String title;
     private final int pageIndex;
     private final int lineNumber;
+    private final URL target;
 
     public Chapter(String title, int pageIndex, int lineNumber) {
+        this(title, pageIndex, lineNumber, null);
+    }
+
+    public Chapter(String title, int pageIndex, int lineNumber, URL target) {
         this.title = title;
         this.pageIndex = pageIndex;
         this.lineNumber = lineNumber;
+        this.target = target;
     }
 
     public String getTitle() {
@@ -24,6 +32,10 @@ public class Chapter {
 
     public int getLineNumber() {
         return lineNumber;
+    }
+
+    public URL getTarget() {
+        return target;
     }
 
     @Override

@@ -1,9 +1,10 @@
 package com.falcon.reader.ui.view;
 
 import com.falcon.reader.domain.NovelConfig;
+import com.falcon.reader.domain.Chapter;
 import com.falcon.reader.epub.EpubHtmlProcessor;
+import com.falcon.reader.epub.EpubBook;
 
-import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.BadLocationException;
@@ -12,13 +13,15 @@ import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.util.function.Consumer;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -33,6 +36,10 @@ public class NovelView {
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern SRC_ATTRIBUTE_PATTERN = Pattern.compile(
             "\\bsrc\\s*=\\s*(['\"])([^'\"]+)\\1", Pattern.CASE_INSENSITIVE);
+    private static final Pattern BODY_TAG_PATTERN = Pattern.compile("<body\\b[^>]*>",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern STYLE_ATTRIBUTE_PATTERN = Pattern.compile(
+            "\\bstyle\\s*=\\s*(['\"])(.*?)\\1", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private final JFrame frame;
     private final JLabel label;
     private final JEditorPane epubPane;
@@ -52,6 +59,9 @@ public class NovelView {
     private boolean epubWasDragged;
     private boolean footnoteDismissedByPress;
     private final EpubHtmlProcessor htmlProcessor = new EpubHtmlProcessor();
+    private EpubBook epubBook;
+    private int currentSectionIndex;
+    private final Map<PageLayoutKey, List<Integer>> epubPageCache = new HashMap<>();
     private FootnoteBubble footnoteBubble;
     private int epubPageIndex;
     private int epubPageCount = 1;
@@ -154,6 +164,10 @@ public class NovelView {
         });
 
         epubScrollPane = new JScrollPane(epubPane);
+        PageClippingViewport epubViewport = new PageClippingViewport();
+        epubViewport.setView(epubPane);
+        epubViewport.setScrollMode(JViewport.SIMPLE_SCROLL_MODE);
+        epubScrollPane.setViewport(epubViewport);
         epubScrollPane.setOpaque(false);
         epubScrollPane.getViewport().setOpaque(false);
         epubScrollPane.getViewport().setBackground(new Color(0, 0, 0, 0));
@@ -243,6 +257,11 @@ public class NovelView {
         pendingEpubPageIndex = pageIndex;
     }
 
+    public void setEpubBook(EpubBook epubBook) {
+        this.epubBook = epubBook;
+        epubPageCache.clear();
+    }
+
     public int getEpubPageIndex() {
         return epubPageIndex;
     }
@@ -255,30 +274,10 @@ public class NovelView {
      * Returns the spine section currently visible in the continuous EPUB document.
      */
     public int getCurrentEpubSectionIndex(int sectionCount) {
-        if (!epubMode || sectionCount <= 0 || !(epubPane.getDocument() instanceof HTMLDocument)) {
+        if (!epubMode || sectionCount <= 0) {
             return 0;
         }
-
-        HTMLDocument document = (HTMLDocument) epubPane.getDocument();
-        int visibleY = epubScrollPane.getViewport().getViewPosition().y;
-        int currentSectionIndex = 0;
-        for (int i = 0; i < sectionCount; i++) {
-            Element section = findElementById(document.getDefaultRootElement(), "codex-section-" + i);
-            if (section == null) {
-                continue;
-            }
-            try {
-                Rectangle bounds = epubPane.modelToView(section.getStartOffset());
-                if (bounds != null && bounds.y <= visibleY) {
-                    currentSectionIndex = i;
-                } else if (bounds != null) {
-                    break;
-                }
-            } catch (BadLocationException ignored) {
-                // Keep the closest section that could be resolved.
-            }
-        }
-        return currentSectionIndex;
+        return Math.max(0, Math.min(currentSectionIndex, sectionCount - 1));
     }
 
     public boolean navigateEpubLink(URL target) {
@@ -324,21 +323,25 @@ public class NovelView {
         hideFootnoteBubble();
         epubMode = true;
         currentSection = section;
+        currentSectionIndex = findSectionIndex(section);
         label.setVisible(false);
         epubScrollPane.setVisible(true);
         HTMLEditorKit kit = new HTMLEditorKit();
+        applyReaderFont(kit, epubPane.getFont());
         HTMLDocument document = (HTMLDocument) kit.createDefaultDocument();
         document.setBase(section);
         // EPUB XHTML usually contains an XML declaration or a meta charset tag.
         // The content has already been decoded as UTF-8, so prevent Swing's HTML
         // parser from aborting with a message-less ChangedCharSetException.
         document.putProperty("IgnoreCharsetDirective", Boolean.TRUE);
-        try (InputStream input = section.openStream()) {
-            try {
-                kit.read(new StringReader(resizeImages(htmlProcessor.readAndProcess(input))), document, 0);
-            } catch (javax.swing.text.BadLocationException ex) {
-                throw new IOException("EPUB 章节内容无效", ex);
-            }
+        EpubHtmlProcessor.ProcessedContent content = epubBook == null
+                ? readProcessed(section) : epubBook.prepareSection(currentSectionIndex);
+        htmlProcessor.use(content);
+        try {
+            String readerHtml = applyReaderFontToHtml(content.getHtml(), epubPane.getFont());
+            kit.read(new StringReader(resizeImages(readerHtml)), document, 0);
+        } catch (javax.swing.text.BadLocationException ex) {
+            throw new IOException("EPUB 章节内容无效", ex);
         }
         epubPane.setEditorKit(kit);
         epubPane.setDocument(document);
@@ -464,15 +467,15 @@ public class NovelView {
             }
             try {
                 URL imageUrl = new URL(currentSection, sourceMatcher.group(2));
-                BufferedImage image = ImageIO.read(imageUrl);
-                if (image == null || image.getWidth() <= 0 || image.getHeight() <= 0) {
+                Dimension image = epubBook == null ? null : epubBook.getImageSize(imageUrl);
+                if (image == null || image.width <= 0 || image.height <= 0) {
                     matcher.appendReplacement(resizedHtml, Matcher.quoteReplacement(tag));
                     continue;
                 }
-                double scale = Math.min(1.0, Math.min(maxWidth / (double) image.getWidth(),
-                        maxHeight / (double) image.getHeight()));
-                int width = Math.max(1, (int) Math.round(image.getWidth() * scale));
-                int height = Math.max(1, (int) Math.round(image.getHeight() * scale));
+                double scale = Math.min(1.0, Math.min(maxWidth / (double) image.width,
+                        maxHeight / (double) image.height));
+                int width = Math.max(1, (int) Math.round(image.width * scale));
+                int height = Math.max(1, (int) Math.round(image.height * scale));
                 String resizedTag = tag
                         .replaceAll("(?i)\\s+(?:width|height)\\s*=\\s*(['\"])[^'\"]*\\1", "")
                         .replaceFirst("\\s*/?>$", " width=\"" + width + "\" height=\"" + height + "\">");
@@ -492,29 +495,41 @@ public class NovelView {
 
         epubPane.setSize(pageWidth, Short.MAX_VALUE);
         Dimension preferred = epubPane.getPreferredSize();
-        int contentHeight = Math.max(pageHeight, preferred.height);
-        epubPane.setSize(pageWidth, contentHeight);
+        int documentHeight = Math.max(pageHeight, preferred.height);
+        // Leave one viewport of trailing space so the final logical page can stay
+        // aligned to its real line boundary instead of being forced to maxScroll.
+        // Forced bottom alignment creates several page starts only one line apart,
+        // which is incompatible with clipping the partial line at a page boundary.
+        int viewHeight = documentHeight > Integer.MAX_VALUE - pageHeight
+                ? Integer.MAX_VALUE : documentHeight + pageHeight;
+        epubPane.setSize(pageWidth, viewHeight);
 
-        int maxScroll = Math.max(0, contentHeight - pageHeight);
+        PageLayoutKey cacheKey = new PageLayoutKey(currentSection, pageWidth, pageHeight, epubPane.getFont());
+        List<Integer> cachedPositions = epubPageCache.get(cacheKey);
         epubPagePositions.clear();
-        epubPagePositions.add(0);
-        int position = 0;
-        while (position < maxScroll) {
-            int target = Math.min(maxScroll, position + pageHeight);
-            try {
-                int offset = epubPane.viewToModel(new Point(4, target));
-                Rectangle line = epubPane.modelToView(offset);
-                if (line != null && line.y > position + 4 && line.y <= maxScroll) {
-                    target = line.y;
+        if (cachedPositions != null) {
+            epubPagePositions.addAll(cachedPositions);
+        } else {
+            epubPagePositions.add(0);
+            int position = 0;
+            while (position + pageHeight < documentHeight) {
+                int target = position + pageHeight;
+                try {
+                    int offset = epubPane.viewToModel(new Point(4, target));
+                    Rectangle line = epubPane.modelToView(offset);
+                    if (line != null && line.y > position + 4 && line.y < documentHeight) {
+                        target = line.y;
+                    }
+                } catch (BadLocationException ignored) {
+                    // The height-based target remains a safe fallback.
                 }
-            } catch (BadLocationException ignored) {
-                // The height-based target remains a safe fallback.
+                if (target <= position) {
+                    break;
+                }
+                epubPagePositions.add(target);
+                position = target;
             }
-            if (target <= position) {
-                break;
-            }
-            epubPagePositions.add(target);
-            position = target;
+            epubPageCache.put(cacheKey, new java.util.ArrayList<>(epubPagePositions));
         }
         epubPageCount = Math.max(1, epubPagePositions.size());
 
@@ -559,6 +574,149 @@ public class NovelView {
         }
         epubPageIndex = Math.max(0, Math.min(epubPageIndex, epubPagePositions.size() - 1));
         epubScrollPane.getViewport().setViewPosition(new Point(0, epubPagePositions.get(epubPageIndex)));
+        epubScrollPane.getViewport().repaint();
+    }
+
+    /** Clips the overlap reserved for the first complete line on the following page. */
+    private final class PageClippingViewport extends JViewport {
+        @Override
+        protected void paintChildren(Graphics graphics) {
+            Graphics clipped = graphics.create();
+            try {
+                int visibleHeight = getHeight();
+                if (epubMode && epubPageIndex >= 0
+                        && epubPageIndex + 1 < epubPagePositions.size()) {
+                    int current = epubPagePositions.get(epubPageIndex);
+                    int next = epubPagePositions.get(epubPageIndex + 1);
+                    visibleHeight = Math.max(0, Math.min(visibleHeight, next - current));
+                }
+                clipped.clipRect(0, 0, getWidth(), visibleHeight);
+                super.paintChildren(clipped);
+            } finally {
+                clipped.dispose();
+            }
+        }
+    }
+
+    private void applyReaderFont(HTMLEditorKit kit, Font font) {
+        if (kit == null || font == null) {
+            return;
+        }
+        String family = font.getFamily().replace("\\", "\\\\").replace("'", "\\'");
+        // Only override the font family. Link colors, decorations, emphasis,
+        // footnotes and the EPUB's heading hierarchy remain untouched.
+        kit.getStyleSheet().addRule("body, p, div, span, li, td, th, a { font-family: '"
+                + family + "' !important; }");
+        // A body-level size remains inheritable, so relative heading, note,
+        // superscript and subscript sizes from the EPUB continue to work.
+        kit.getStyleSheet().addRule("body { font-size: " + font.getSize() + "pt !important; }");
+    }
+
+    private String applyReaderFontToHtml(String html, Font font) {
+        if (html == null || font == null) {
+            return html;
+        }
+        Matcher bodyMatcher = BODY_TAG_PATTERN.matcher(html);
+        if (!bodyMatcher.find()) {
+            return html;
+        }
+        String bodyTag = bodyMatcher.group();
+        Matcher styleMatcher = STYLE_ATTRIBUTE_PATTERN.matcher(bodyTag);
+        String rewrittenBody;
+        if (styleMatcher.find()) {
+            char attributeQuote = styleMatcher.group(1).charAt(0);
+            char familyQuote = attributeQuote == '\'' ? '"' : '\'';
+            String declaration = readerFontDeclaration(font, familyQuote);
+            String style = "style=" + attributeQuote + declaration + styleMatcher.group(2) + attributeQuote;
+            rewrittenBody = styleMatcher.replaceFirst(Matcher.quoteReplacement(style));
+        } else {
+            String declaration = readerFontDeclaration(font, '\'');
+            rewrittenBody = bodyTag.substring(0, bodyTag.length() - 1)
+                    + " style=\"" + declaration + "\">";
+        }
+        return bodyMatcher.replaceFirst(Matcher.quoteReplacement(rewrittenBody));
+    }
+
+    private String readerFontDeclaration(Font font, char quote) {
+        String family = font.getFamily().replace("\\", "\\\\")
+                .replace(String.valueOf(quote), "\\" + quote);
+        return "font-family:" + quote + family + quote + ";font-size:" + font.getSize() + "pt;";
+    }
+
+    public int getCurrentEpubChapterIndex(List<Chapter> chapters) {
+        if (!epubMode || chapters == null || chapters.isEmpty()
+                || !(epubPane.getDocument() instanceof HTMLDocument)) return -1;
+        int visibleY = epubScrollPane.getViewport().getViewPosition().y;
+        int selected = -1;
+        for (int i = 0; i < chapters.size(); i++) {
+            Chapter chapter = chapters.get(i);
+            if (chapter.getPageIndex() < currentSectionIndex) {
+                selected = i;
+                continue;
+            }
+            if (chapter.getPageIndex() > currentSectionIndex) break;
+            URL target = chapter.getTarget();
+            if (target == null || target.getRef() == null || target.getRef().isEmpty()) {
+                selected = i;
+                continue;
+            }
+            String reference = target.getRef();
+            try {
+                reference = URLDecoder.decode(reference, "UTF-8");
+                Element element = findElementById(epubPane.getDocument().getDefaultRootElement(), reference);
+                Rectangle bounds = element == null ? null : epubPane.modelToView(element.getStartOffset());
+                if (bounds != null && bounds.y <= visibleY + 2) selected = i;
+            } catch (Exception ignored) {
+                // Keep the nearest earlier directory entry.
+            }
+        }
+        return selected;
+    }
+
+    private int findSectionIndex(URL section) {
+        if (epubBook == null) return 0;
+        for (int i = 0; i < epubBook.getSections().size(); i++) {
+            URL candidate = epubBook.getSections().get(i);
+            if (candidate.getProtocol().equalsIgnoreCase(section.getProtocol())
+                    && candidate.getPath().equals(section.getPath())) return i;
+        }
+        return 0;
+    }
+
+    private EpubHtmlProcessor.ProcessedContent readProcessed(URL section) throws IOException {
+        try (InputStream input = section.openStream()) {
+            return htmlProcessor.readProcessed(input);
+        }
+    }
+
+    private static final class PageLayoutKey {
+        private final String section;
+        private final int width;
+        private final int height;
+        private final String font;
+
+        private PageLayoutKey(URL section, int width, int height, Font font) {
+            this.section = section == null ? "" : section.toExternalForm();
+            this.width = width;
+            this.height = height;
+            this.font = font == null ? "" : font.getName() + ':' + font.getStyle() + ':' + font.getSize();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (!(other instanceof PageLayoutKey)) return false;
+            PageLayoutKey key = (PageLayoutKey) other;
+            return width == key.width && height == key.height
+                    && section.equals(key.section) && font.equals(key.font);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = section.hashCode();
+            result = 31 * result + width;
+            result = 31 * result + height;
+            return 31 * result + font.hashCode();
+        }
     }
 
     private boolean isContinuousEpubDocument() {

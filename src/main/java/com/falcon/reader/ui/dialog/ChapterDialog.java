@@ -20,15 +20,23 @@ public class ChapterDialog {
     private final Font font;
     private final int maxPages;
     private final int initialPage;
+    private final int initialChapterIndex;
+    private final boolean epubMode;
     private final Consumer<Integer> jumpCallback;
+    private final Consumer<Chapter> chapterJumpCallback;
 
-    public ChapterDialog(JFrame frame, List<Chapter> chapters, Font font, int maxPages, int initialPage, Consumer<Integer> jumpCallback) {
+    public ChapterDialog(JFrame frame, List<Chapter> chapters, Font font, int maxPages, int initialPage,
+            int initialChapterIndex, boolean epubMode, Consumer<Integer> jumpCallback,
+            Consumer<Chapter> chapterJumpCallback) {
         this.frame = frame;
         this.chapters = chapters;
         this.font = font;
         this.maxPages = maxPages;
         this.initialPage = initialPage;
+        this.initialChapterIndex = initialChapterIndex;
+        this.epubMode = epubMode;
         this.jumpCallback = jumpCallback;
+        this.chapterJumpCallback = chapterJumpCallback;
     }
 
     public void show() {
@@ -38,8 +46,19 @@ public class ChapterDialog {
         JList<Chapter> chapterList = new JList<>(listModel);
         chapterList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         chapterList.setFont(font.deriveFont(Font.PLAIN, font.getSize()));
+        if (epubMode) {
+            chapterList.setCellRenderer((list, chapter, index, selected, focused) -> {
+                JLabel label = new JLabel(chapter.getTitle() + "  ·  第 " + (chapter.getPageIndex() + 1) + " 页");
+                label.setOpaque(true);
+                label.setFont(list.getFont());
+                label.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
+                label.setBackground(selected ? list.getSelectionBackground() : list.getBackground());
+                label.setForeground(selected ? list.getSelectionForeground() : list.getForeground());
+                return label;
+            });
+        }
         chapterList.setFixedCellHeight(chapterList.getFontMetrics(chapterList.getFont()).getHeight() + 12);
-        int currentChapterIndex = findCurrentChapterIndex();
+        int currentChapterIndex = initialChapterIndex >= 0 ? initialChapterIndex : findCurrentChapterIndex();
         if (currentChapterIndex >= 0) {
             chapterList.setSelectedIndex(currentChapterIndex);
         }
@@ -71,7 +90,15 @@ public class ChapterDialog {
             }
         });
 
-        jumpButton.addActionListener(e -> jumpToPage(pageField, dialog));
+        jumpButton.addActionListener(e -> {
+            Chapter selected = chapterList.getSelectedValue();
+            if (epubMode && selected != null
+                    && pageField.getText().equals(String.valueOf(selected.getPageIndex() + 1))) {
+                jumpToChapter(selected, dialog);
+            } else {
+                jumpToPage(pageField, dialog);
+            }
+        });
         cancelButton.addActionListener(e -> dialog.dispose());
 
         chapterList.addMouseListener(new MouseAdapter() {
@@ -80,6 +107,10 @@ public class ChapterDialog {
                 if (e.getClickCount() == 2) {
                     Chapter chapter = chapterList.getSelectedValue();
                     if (chapter != null && !chapters.isEmpty()) {
+                        if (epubMode) {
+                            jumpToChapter(chapter, dialog);
+                            return;
+                        }
                         pageField.setText(String.valueOf(chapter.getPageIndex() + 1));
                     }
                     jumpToPage(pageField, dialog);
@@ -88,7 +119,7 @@ public class ChapterDialog {
         });
 
         JPanel jumpPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 1));
-        jumpPanel.add(new JLabel("页码:"));
+        jumpPanel.add(new JLabel(epubMode ? "章节:" : "页码:"));
         jumpPanel.add(pageField);
         jumpPanel.add(new JLabel("/ " + maxPages));
 
@@ -141,5 +172,14 @@ public class ChapterDialog {
             }
         }
         return selectedIndex;
+    }
+
+    private void jumpToChapter(Chapter chapter, JDialog dialog) {
+        if (chapterJumpCallback != null) {
+            chapterJumpCallback.accept(chapter);
+        } else {
+            jumpCallback.accept(chapter.getPageIndex());
+        }
+        dialog.dispose();
     }
 }

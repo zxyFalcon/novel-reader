@@ -161,7 +161,11 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
                 EpubBook parsed = EpubParser.parse(targetFilePath);
                 if (isCancelled()) {
                     parsed.close();
+                    return parsed;
                 }
+                int initialSection = Math.max(0, Math.min(targetSection, parsed.getSections().size() - 1));
+                parsed.prepareSection(initialSection);
+                parsed.preloadAround(initialSection);
                 return parsed;
             }
 
@@ -172,6 +176,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
                 }
                 try {
                     epubBook = get();
+                    novelView.setEpubBook(epubBook);
                     pages = new ArrayList<>();
                     for (int i = 0; i < epubBook.getSections().size(); i++) {
                         pages.add("");
@@ -201,6 +206,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         if (novelView != null && novelView.isEpubMode()) {
             if (epubBook != null && currentPage >= 0 && currentPage < epubBook.getSections().size()) {
                 try {
+                    epubBook.preloadAround(currentPage);
                     novelView.showEpub(epubBook.getSections().get(currentPage));
                 } catch (IOException ex) {
                     novelView.showEpubMessage("无法显示 EPUB 章节：" + rootCauseMessage(ex));
@@ -430,14 +436,28 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         if (pages.isEmpty()) {
             return;
         }
-        int chapterPage = novelView.isEpubMode()
+        boolean epub = novelView.isEpubMode();
+        int chapterPage = epub
                 ? novelView.getCurrentEpubSectionIndex(pages.size())
                 : currentPage;
-        new ChapterDialog(frame, chapters, novelView.getReadingFont(), pages.size(), chapterPage, pageIndex -> {
+        int chapterIndex = epub ? novelView.getCurrentEpubChapterIndex(chapters) : -1;
+        new ChapterDialog(frame, chapters, novelView.getReadingFont(), pages.size(), chapterPage,
+                chapterIndex, epub, pageIndex -> {
             currentPage = Math.max(0, Math.min(pageIndex, pages.size() - 1));
             showPage();
             saveCurrentRecord();
-        }).show();
+        }, this::jumpToEpubChapter).show();
+    }
+
+    private void jumpToEpubChapter(Chapter chapter) {
+        if (chapter == null) return;
+        currentPage = Math.max(0, Math.min(chapter.getPageIndex(), pages.size() - 1));
+        if (chapter.getTarget() != null) {
+            openEpubLink(chapter.getTarget());
+        } else {
+            showPage();
+            saveCurrentRecord();
+        }
     }
 
     private void saveAndExit() {
@@ -476,6 +496,20 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
             scheduleSaveCurrentRecord();
             return;
         }
+
+        int targetSection = epubBook.findSectionIndex(target);
+        if (targetSection >= 0) {
+            try {
+                currentPage = targetSection;
+                novelView.showEpub(target);
+                scheduleSaveCurrentRecord();
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(frame, "无法打开 EPUB 链接：" + ex.getMessage(),
+                        "链接", JOptionPane.WARNING_MESSAGE);
+            }
+            return;
+        }
+
         if (!"file".equalsIgnoreCase(target.getProtocol())) {
             try {
                 if (Desktop.isDesktopSupported()) {
@@ -490,6 +524,7 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
         try {
             String targetPath = new File(new URI(target.getProtocol(), target.getAuthority(), target.getPath(), null, null))
                     .getCanonicalPath();
+            // Compatibility path for legacy extracted EPUB resources.
             for (int i = 0; i < epubBook.getSections().size(); i++) {
                 URL section = epubBook.getSections().get(i);
                 File sectionFile = new File(new URI(section.getProtocol(), section.getAuthority(),
@@ -522,6 +557,9 @@ public class NovelReader implements MouseListener, MouseMotionListener, MouseWhe
 
     private void releaseEpubBook() {
         if (epubBook != null) {
+            if (novelView != null) {
+                novelView.setEpubBook(null);
+            }
             epubBook.close();
             epubBook = null;
         }

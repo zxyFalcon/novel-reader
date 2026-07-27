@@ -42,6 +42,15 @@ public class NovelItem {
     }
 
     public Integer getProgressPercent() {
+        if (fullPath != null && fullPath.toLowerCase(java.util.Locale.ROOT).endsWith(".epub")
+                && currentPage != null && currentPage >= 0 && totalPages != null && totalPages > 0) {
+            double sectionProgress = 0.0;
+            if (currentOffset != null && currentOffset >= 0 && totalLength != null && totalLength > 1) {
+                sectionProgress = Math.min(1.0, currentOffset / (double) (totalLength - 1));
+            }
+            double bookProgress = (Math.min(currentPage, totalPages - 1) + sectionProgress) / totalPages;
+            return (int) Math.max(0, Math.min(100, Math.round(bookProgress * 100.0)));
+        }
         if (currentOffset != null && currentOffset >= 0 && totalLength != null && totalLength > 0) {
             if (currentPage != null && totalPages != null && totalPages > 0 && currentPage + 1 >= totalPages) {
                 return 100;

@@ -18,32 +18,30 @@ import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-/** Extracts an EPUB and resolves its package, spine and EPUB 2/3 navigation. */
+/** Opens an EPUB ZIP and resolves its package, spine and EPUB 2/3 navigation on demand. */
 public final class EpubParser {
     private EpubParser() {
     }
 
     public static EpubBook parse(String filePath) throws Exception {
-        File extractionRoot = Files.createTempDirectory("novel-reader-epub-").toFile();
+        EpubArchive archive = new EpubArchive(new File(filePath));
         boolean success = false;
         try {
-            extractSafely(new File(filePath), extractionRoot);
-            File container = new File(extractionRoot, "META-INF/container.xml");
-            if (!container.isFile()) {
+            if (!archive.contains("META-INF/container.xml")) {
                 throw new IOException("EPUB 缺少 META-INF/container.xml");
             }
 
-            Document containerDocument = parseXml(container);
+            Document containerDocument = parseXml(archive, "META-INF/container.xml");
             Element rootFile = firstElement(containerDocument, "rootfile");
             if (rootFile == null || rootFile.getAttribute("full-path").isEmpty()) {
                 throw new IOException("EPUB 未声明内容包");
             }
 
-            File packageFile = resolveInside(extractionRoot, rootFile.getAttribute("full-path"));
-            Document packageDocument = parseXml(packageFile);
-            File packageDirectory = packageFile.getParentFile();
+            String packagePath = EpubArchive.normalizeEntryName(decodedPath(rootFile.getAttribute("full-path")));
+            Document packageDocument = parseXml(archive, packagePath);
+            String packageDirectory = parentPath(packagePath);
 
-            Map<String, ManifestItem> manifest = readManifest(packageDocument, packageDirectory, extractionRoot);
+            Map<String, ManifestItem> manifest = readManifest(packageDocument, packageDirectory, archive);
             List<URL> originalSections = readSpine(packageDocument, manifest);
             if (originalSections.isEmpty()) {
                 throw new IOException("EPUB 阅读顺序为空");
@@ -52,21 +50,21 @@ public final class EpubParser {
             List<Chapter> chapters = readNavigation(packageDocument, manifest, originalSections);
             if (chapters.isEmpty()) {
                 for (int i = 0; i < originalSections.size(); i++) {
-                    String path = new File(originalSections.get(i).toURI()).getName();
+                    String path = new File(originalSections.get(i).getPath()).getName();
                     chapters.add(new Chapter(path, i, i + 1));
                 }
             }
-            List<URL> sections = combineSections(extractionRoot, originalSections);
             success = true;
-            return new EpubBook(extractionRoot, sections, chapters);
+            return new EpubBook(archive, originalSections, chapters);
         } finally {
             if (!success) {
-                deleteRecursively(extractionRoot);
+                archive.close();
             }
         }
     }
 
-    private static Map<String, ManifestItem> readManifest(Document document, File packageDirectory, File root)
+    private static Map<String, ManifestItem> readManifest(Document document, String packageDirectory,
+            EpubArchive archive)
             throws Exception {
         Map<String, ManifestItem> result = new LinkedHashMap<>();
         NodeList items = document.getElementsByTagNameNS("*", "item");
@@ -77,9 +75,9 @@ public final class EpubParser {
             if (id.isEmpty() || href.isEmpty()) {
                 continue;
             }
-            File file = resolveInside(root, relativize(root, packageDirectory) + decodedPath(href));
+            String entryName = resolveEntry(packageDirectory, decodedPath(href));
             result.put(id, new ManifestItem(id, href, item.getAttribute("media-type"),
-                    item.getAttribute("properties"), file));
+                    item.getAttribute("properties"), archive.url(entryName), archive.contains(entryName)));
         }
         return result;
     }
@@ -89,8 +87,8 @@ public final class EpubParser {
         NodeList itemRefs = document.getElementsByTagNameNS("*", "itemref");
         for (int i = 0; i < itemRefs.getLength(); i++) {
             ManifestItem item = manifest.get(((Element) itemRefs.item(i)).getAttribute("idref"));
-            if (item != null && item.file.isFile()) {
-                sections.add(item.file.toURI().toURL());
+            if (item != null && item.exists) {
+                sections.add(item.url);
             }
         }
         return sections;
@@ -305,8 +303,8 @@ public final class EpubParser {
         }
 
         for (ManifestItem item : manifest.values()) {
-            if (containsToken(item.properties, "nav") && item.file.isFile()) {
-                List<Chapter> chapters = readEpub3Navigation(item.file, spineIndexes);
+            if (containsToken(item.properties, "nav") && item.exists) {
+                List<Chapter> chapters = readEpub3Navigation(item, spineIndexes);
                 if (!chapters.isEmpty()) {
                     return chapters;
                 }
@@ -324,12 +322,12 @@ public final class EpubParser {
                 }
             }
         }
-        return ncx == null || !ncx.file.isFile()
-                ? new ArrayList<>() : readNcxNavigation(ncx.file, spineIndexes);
+        return ncx == null || !ncx.exists
+                ? new ArrayList<>() : readNcxNavigation(ncx, spineIndexes);
     }
 
-    private static List<Chapter> readEpub3Navigation(File navFile, Map<String, Integer> spineIndexes) throws Exception {
-        Document document = parseXml(navFile);
+    private static List<Chapter> readEpub3Navigation(ManifestItem navItem, Map<String, Integer> spineIndexes) throws Exception {
+        Document document = parseXml(navItem.url);
         Element toc = null;
         NodeList navs = document.getElementsByTagNameNS("*", "nav");
         for (int i = 0; i < navs.getLength(); i++) {
@@ -348,14 +346,14 @@ public final class EpubParser {
             NodeList links = toc.getElementsByTagNameNS("*", "a");
             for (int i = 0; i < links.getLength(); i++) {
                 Element link = (Element) links.item(i);
-                addNavigationEntry(result, link.getTextContent(), navFile, link.getAttribute("href"), spineIndexes);
+                addNavigationEntry(result, link.getTextContent(), navItem.url, link.getAttribute("href"), spineIndexes);
             }
         }
         return result;
     }
 
-    private static List<Chapter> readNcxNavigation(File ncxFile, Map<String, Integer> spineIndexes) throws Exception {
-        Document document = parseXml(ncxFile);
+    private static List<Chapter> readNcxNavigation(ManifestItem ncx, Map<String, Integer> spineIndexes) throws Exception {
+        Document document = parseXml(ncx.url);
         List<Chapter> result = new ArrayList<>();
         NodeList points = document.getElementsByTagNameNS("*", "navPoint");
         for (int i = 0; i < points.getLength(); i++) {
@@ -363,19 +361,19 @@ public final class EpubParser {
             Element content = descendant(point, "content");
             Element text = descendant(point, "text");
             if (content != null) {
-                addNavigationEntry(result, text == null ? "章节 " + (i + 1) : text.getTextContent(), ncxFile,
+                addNavigationEntry(result, text == null ? "章节 " + (i + 1) : text.getTextContent(), ncx.url,
                         content.getAttribute("src"), spineIndexes);
             }
         }
         return result;
     }
 
-    private static void addNavigationEntry(List<Chapter> result, String title, File navigationFile, String href,
+    private static void addNavigationEntry(List<Chapter> result, String title, URL navigationFile, String href,
             Map<String, Integer> spineIndexes) throws Exception {
         if (href == null || href.trim().isEmpty()) {
             return;
         }
-        URL target = navigationFile.toURI().resolve(href).toURL();
+        URL target = new URL(navigationFile, href);
         Integer pageIndex = spineIndexes.get(canonicalWithoutFragment(target));
         if (pageIndex == null) {
             return;
@@ -384,7 +382,7 @@ public final class EpubParser {
         if (normalizedTitle.isEmpty()) {
             normalizedTitle = "章节 " + (result.size() + 1);
         }
-        result.add(new Chapter(normalizedTitle, pageIndex, result.size() + 1));
+        result.add(new Chapter(normalizedTitle, pageIndex, result.size() + 1, target));
     }
 
     private static void extractSafely(File epub, File destination) throws IOException {
@@ -431,6 +429,29 @@ public final class EpubParser {
         }
     }
 
+    private static Document parseXml(EpubArchive archive, String entryName) throws Exception {
+        try (InputStream stream = archive.open(entryName)) {
+            return parseXml(stream);
+        }
+    }
+
+    private static Document parseXml(URL url) throws Exception {
+        try (InputStream stream = url.openStream()) {
+            return parseXml(stream);
+        }
+    }
+
+    private static Document parseXml(InputStream stream) throws Exception {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        return builder.parse(new InputSource(stream));
+    }
+
     private static Element firstElement(Document document, String localName) {
         NodeList elements = document.getElementsByTagNameNS("*", localName);
         return elements.getLength() == 0 ? null : (Element) elements.item(0);
@@ -471,7 +492,19 @@ public final class EpubParser {
         }
     }
 
+    private static String parentPath(String entryName) {
+        int separator = entryName.lastIndexOf('/');
+        return separator < 0 ? "" : entryName.substring(0, separator + 1);
+    }
+
+    private static String resolveEntry(String baseDirectory, String relativePath) throws IOException {
+        return EpubArchive.normalizeEntryName(baseDirectory + relativePath);
+    }
+
     private static String canonicalWithoutFragment(URL url) throws Exception {
+        if ("epub".equals(url.getProtocol())) {
+            return EpubArchive.normalizeEntryName(url.toURI().getPath());
+        }
         URI uri = url.toURI();
         URI withoutFragment = new URI(uri.getScheme(), uri.getAuthority(), uri.getPath(), uri.getQuery(), null);
         return new File(withoutFragment).getCanonicalPath();
@@ -501,14 +534,16 @@ public final class EpubParser {
         private final String href;
         private final String mediaType;
         private final String properties;
-        private final File file;
+        private final URL url;
+        private final boolean exists;
 
-        private ManifestItem(String id, String href, String mediaType, String properties, File file) {
+        private ManifestItem(String id, String href, String mediaType, String properties, URL url, boolean exists) {
             this.id = id;
             this.href = href;
             this.mediaType = mediaType;
             this.properties = properties;
-            this.file = file;
+            this.url = url;
+            this.exists = exists;
         }
     }
 }
