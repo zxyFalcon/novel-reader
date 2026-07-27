@@ -1,8 +1,8 @@
-package com.falcon.reader.model;
+package com.falcon.reader.pagination;
 
-import com.falcon.reader.entity.Chapter;
+import com.falcon.reader.domain.Chapter;
 import com.falcon.reader.util.EncodingDetect;
-import javax.swing.*;
+
 import java.awt.*;
 import java.io.BufferedReader;
 import java.io.FileInputStream;
@@ -25,25 +25,8 @@ public class PageCalculator {
             Pattern.CASE_INSENSITIVE);
 
     /**
-     * 计算小说文件的页内容，根据标签尺寸和字体进行像素级精确分页
-     * 实现原理：
-     * 1. 使用 FontMetrics 测量每个字符的精确像素宽度
-     * 2. 按行读取原始文本，将每行按可用宽度切割成多个显示行
-     * 3. 根据标签高度和行高计算每页最多容纳的行数
-     * 4. 将切割后的显示行组装成 HTML 格式的页面
-     *
-     * @param filePath 小说文件路径
-     * @param label    显示内容的标签，用于获取字体信息和显示区域尺寸
-     * @return 分页内容列表，每个元素是一页完整的 HTML 字符串；如果无法分页或发生异常则返回空列表
+     * Calculates TXT pages and chapter positions using the supplied font metrics and viewport size.
      */
-    public static List<String> calculatePages(String filePath, JLabel label) {
-        return calculate(filePath, label.getFontMetrics(label.getFont()), label.getWidth(), label.getHeight()).getPages();
-    }
-
-    public static List<String> calculatePages(String filePath, FontMetrics fm, int availableWidth, int availableHeight) {
-        return calculate(filePath, fm, availableWidth, availableHeight).getPages();
-    }
-
     public static PageResult calculate(String filePath, FontMetrics fm, int availableWidth, int availableHeight) {
         List<String> pages = new ArrayList<>();
         List<Chapter> chapters = new ArrayList<>();

@@ -1,13 +1,14 @@
-package com.falcon.reader.model;
+package com.falcon.reader.persistence;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
-import com.falcon.reader.entity.NovelConfig;
-import com.falcon.reader.entity.NovelRecord;
+import com.falcon.reader.domain.NovelConfig;
+import com.falcon.reader.domain.NovelRecord;
+import com.falcon.reader.domain.ReadingData;
+import com.falcon.reader.domain.WindowState;
 
-import javax.swing.*;
 import java.awt.*;
 import java.io.*;
 import java.nio.charset.Charset;
@@ -19,47 +20,64 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.*;
+import java.util.function.Consumer;
 
 /**
- * 阅读记录处理类
- * 负责保存、删除和加载阅读器的配置（窗口大小、位置、字体、颜色）以及每本小说的阅读进度
+ * Persists reader settings, window bounds and per-book reading progress in one JSON file.
+ * This class is UI-independent; failures are reported through the injected error handler.
  *
  * @author zxy
  * @date 2024/10/21 14:13
  **/
-public class ReadingRecord {
-
-    /** 存储所有阅读记录及配置的JSON文件名 */
-    private static final String BOOKMARK_FILE = "bookmark.json";
+public class ReadingRecordRepository {
 
     /**
-     * 保存当前阅读状态及小说进度
-     *
-     * @param frame       主窗口，用于获取窗口大小和位置
-     * @param label       内容显示标签，用于获取字体和前景色
-     * @param filePath    当前阅读的小说文件路径，作为记录的唯一标识
-     * @param currentPage 当前阅读的页码（或滚动位置）
+     * JSON file containing reader settings and progress records.
      */
-    public static void saveRecord(JFrame frame, JLabel label, String filePath, int currentPage) {
-        saveRecord(frame, label, filePath, currentPage, null);
+    private final Path bookmarkFile;
+    private final Consumer<String> errorHandler;
+
+    public ReadingRecordRepository(Path bookmarkFile) {
+        this(bookmarkFile, message -> {
+        });
+    }
+
+    public ReadingRecordRepository(Consumer<String> errorHandler) {
+        this(Paths.get("bookmark.json"), errorHandler);
+    }
+
+    public ReadingRecordRepository(Path bookmarkFile, Consumer<String> errorHandler) {
+        this.bookmarkFile = bookmarkFile;
+        this.errorHandler = errorHandler == null ? message -> {
+        } : errorHandler;
+    }
+
+    private static void writeWindowState(JSONObject jsonObject, WindowState windowState) {
+        if (windowState == null) {
+            return;
+        }
+        jsonObject.set("width", windowState.getWidth());
+        jsonObject.set("height", windowState.getHeight());
+        jsonObject.set("locationX", windowState.getLocationX());
+        jsonObject.set("locationY", windowState.getLocationY());
+    }
+
+    private static void writeConfig(JSONObject jsonObject, NovelConfig config) {
+        if (config == null) {
+            return;
+        }
+        jsonObject.set("font", config.getFont().getName());
+        jsonObject.set("fontSize", config.getFont().getSize());
+        jsonObject.set("fontStyle", config.getFont().getStyle());
+        jsonObject.set("labelForeground", config.getForeground().getRGB());
     }
 
     /**
-     * 保存当前阅读状态及小说进度
-     *
-     * @param frame       主窗口，用于获取窗口大小和位置
-     * @param label       内容显示标签，用于获取字体和前景色
-     * @param filePath    当前阅读的小说文件路径，作为记录的唯一标识
-     * @param currentPage 当前阅读的页码（或滚动位置）
-     * @param totalPages  当前分页结果的总页数
+     * Saves the current application settings and one book's reading position.
      */
-    public static void saveRecord(JFrame frame, JLabel label, String filePath, int currentPage, Integer totalPages) {
-        saveRecord(frame, label, filePath, currentPage, totalPages, null, null);
-    }
-
-    public static void saveRecord(JFrame frame, JLabel label, String filePath, int currentPage, Integer totalPages,
-            Integer currentOffset, Integer totalLength) {
-        Path path = Paths.get(BOOKMARK_FILE);
+    public void saveRecord(WindowState windowState, NovelConfig config, String filePath, int currentPage, Integer totalPages,
+                           Integer currentOffset, Integer totalLength) {
+        Path path = bookmarkFile;
 
         // 仅当文件路径不为空时才执行保存操作
         if (StrUtil.isNotBlank(filePath)) {
@@ -132,16 +150,10 @@ public class ReadingRecord {
             }
 
             // 保存窗口配置：大小、位置
-            jsonObject.set("width", frame.getSize().width);
-            jsonObject.set("height", frame.getSize().height);
-            jsonObject.set("locationX", frame.getLocation().x);
-            jsonObject.set("locationY", frame.getLocation().y);
+            writeWindowState(jsonObject, windowState);
 
             // 保存文本显示配置：字体名称、大小、样式、前景色
-            jsonObject.set("font", label.getFont().getName());
-            jsonObject.set("fontSize", label.getFont().getSize());
-            jsonObject.set("fontStyle", label.getFont().getStyle());
-            jsonObject.set("labelForeground", label.getForeground().getRGB());
+            writeConfig(jsonObject, config);
 
             // 更新小说记录数组
             jsonObject.set("novels", novelArray);
@@ -151,13 +163,13 @@ public class ReadingRecord {
                 file.write(jsonObject.toString());
             } catch (IOException ex) {
                 ex.printStackTrace();
-                JOptionPane.showMessageDialog(frame, "保存记录失败: " + ex.getMessage());
+                reportError("保存记录失败", ex);
             }
         }
     }
 
-    public static void saveConfig(JFrame frame, JLabel label) {
-        Path path = Paths.get(BOOKMARK_FILE);
+    public void saveConfig(WindowState windowState, NovelConfig config) {
+        Path path = bookmarkFile;
         JSONObject jsonObject;
 
         if (!Files.exists(path)) {
@@ -166,6 +178,7 @@ public class ReadingRecord {
                 jsonObject = new JSONObject();
             } catch (IOException e) {
                 e.printStackTrace();
+                reportError("保存设置失败", e);
                 return;
             }
         } else {
@@ -173,36 +186,28 @@ public class ReadingRecord {
                 jsonObject = readJson(path);
             } catch (IOException e) {
                 e.printStackTrace();
-                JOptionPane.showMessageDialog(frame, "保存设置失败: " + e.getMessage());
                 return;
             }
         }
 
-        jsonObject.set("width", frame.getSize().width);
-        jsonObject.set("height", frame.getSize().height);
-        jsonObject.set("locationX", frame.getLocation().x);
-        jsonObject.set("locationY", frame.getLocation().y);
-        jsonObject.set("font", label.getFont().getName());
-        jsonObject.set("fontSize", label.getFont().getSize());
-        jsonObject.set("fontStyle", label.getFont().getStyle());
-        jsonObject.set("labelForeground", label.getForeground().getRGB());
+        writeWindowState(jsonObject, windowState);
+        writeConfig(jsonObject, config);
 
         try (Writer file = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
             file.write(jsonObject.toString());
         } catch (IOException ex) {
             ex.printStackTrace();
-            JOptionPane.showMessageDialog(frame, "保存设置失败: " + ex.getMessage());
+            reportError("保存设置失败", ex);
         }
     }
 
     /**
      * 删除指定文件路径的小说阅读记录
      *
-     * @param frame    主窗口，用于显示错误提示
      * @param filePath 要删除记录的小说文件路径
      */
-    public static void deleteRecord(JFrame frame, String filePath) {
-        Path path = Paths.get(BOOKMARK_FILE);
+    public void deleteRecord(String filePath) {
+        Path path = bookmarkFile;
 
         // 仅当文件路径不为空时才执行删除操作
         if (StrUtil.isNotBlank(filePath)) {
@@ -249,7 +254,7 @@ public class ReadingRecord {
                 file.write(jsonObject.toString());
             } catch (IOException ex) {
                 ex.printStackTrace();
-                JOptionPane.showMessageDialog(frame, "删除记录失败: " + ex.getMessage());
+                reportError("删除记录失败", ex);
             }
         }
     }
@@ -257,17 +262,16 @@ public class ReadingRecord {
     /**
      * 重新定位指定小说记录的文件路径，保留页码、时间和分页信息等阅读进度。
      *
-     * @param frame       主窗口，用于显示错误提示
      * @param oldFilePath 原小说文件路径
      * @param newFilePath 新小说文件路径
      * @return 是否成功更新记录
      */
-    public static boolean relocateRecord(JFrame frame, String oldFilePath, String newFilePath) {
+    public boolean relocateRecord(String oldFilePath, String newFilePath) {
         if (StrUtil.isBlank(oldFilePath) || StrUtil.isBlank(newFilePath)) {
             return false;
         }
 
-        Path path = Paths.get(BOOKMARK_FILE);
+        Path path = bookmarkFile;
         if (!Files.exists(path)) {
             return false;
         }
@@ -297,33 +301,31 @@ public class ReadingRecord {
             return true;
         } catch (IOException ex) {
             ex.printStackTrace();
-            JOptionPane.showMessageDialog(frame, "重新定位文件失败: " + ex.getMessage());
+            reportError("重新定位文件失败", ex);
             return false;
         }
     }
 
     /**
-     * 加载所有保存的阅读记录和窗口配置
+     * Loads reader settings, window bounds and records ordered by last reading time.
      *
-     * @param frame 主窗口，加载后将应用保存的窗口大小和位置
-     * @return Pair对象，左值为NovelConfig（包含字体、颜色等配置），右值为Map<String, NovelRecord>（文件路径到小说记录的映射，按最后阅读时间降序排列）
+     * @return persisted reader data, or defaults when the file does not exist
      */
-    public static ReadingData loadRecord(JFrame frame) {
+    public ReadingData loadRecord() {
         Map<String, NovelRecord> novelRecordMap = new LinkedHashMap<>();
         NovelConfig novelConfig = new NovelConfig();
+        WindowState windowState = null;
 
         // 仅当记录文件存在时才执行加载
-        if (Files.exists(Paths.get(BOOKMARK_FILE))) {
+        if (Files.exists(bookmarkFile)) {
             try {
-                JSONObject jsonObject = readJson(Paths.get(BOOKMARK_FILE));
+                JSONObject jsonObject = readJson(bookmarkFile);
 
                 // 加载窗口大小
                 if (jsonObject.containsKey("width") && jsonObject.containsKey("height")) {
-                    frame.setSize(jsonObject.getInt("width"), jsonObject.getInt("height"));
-                }
-                // 加载窗口位置
-                if (jsonObject.containsKey("locationX") && jsonObject.containsKey("locationY")) {
-                    frame.setLocation(jsonObject.getInt("locationX"), jsonObject.getInt("locationY"));
+                    int locationX = jsonObject.containsKey("locationX") ? jsonObject.getInt("locationX") : 800;
+                    int locationY = jsonObject.containsKey("locationY") ? jsonObject.getInt("locationY") : 500;
+                    windowState = new WindowState(jsonObject.getInt("width"), jsonObject.getInt("height"), locationX, locationY);
                 }
 
                 // 加载字体配置（名称、样式、大小）
@@ -356,13 +358,17 @@ public class ReadingRecord {
                 }
             } catch (IOException | NullPointerException ex) {
                 ex.printStackTrace();
-                JOptionPane.showMessageDialog(frame, "加载记录失败: " + ex.getMessage());
+                reportError("加载记录失败", ex);
             }
         }
-        return new ReadingData(novelConfig, novelRecordMap);
+        return new ReadingData(novelConfig, novelRecordMap, windowState);
     }
 
-    private static JSONObject readJson(Path path) throws IOException {
+    private void reportError(String action, Exception exception) {
+        errorHandler.accept(action + ": " + exception.getMessage());
+    }
+
+    private JSONObject readJson(Path path) throws IOException {
         byte[] bytes = Files.readAllBytes(path);
         if (bytes.length == 0) {
             return new JSONObject();
@@ -374,7 +380,7 @@ public class ReadingRecord {
             try {
                 return parseJson(bytes, Charset.defaultCharset(), false);
             } catch (RuntimeException defaultCharsetEx) {
-                IOException ex = new IOException("阅读记录文件格式错误，请检查或删除 " + BOOKMARK_FILE, defaultCharsetEx);
+                IOException ex = new IOException("阅读记录文件格式错误，请检查或删除 " + bookmarkFile, defaultCharsetEx);
                 ex.addSuppressed(utf8Ex);
                 throw ex;
             }

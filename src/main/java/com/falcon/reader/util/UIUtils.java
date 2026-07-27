@@ -35,39 +35,6 @@ public class UIUtils {
         return button;
     }
 
-    private static class RoundedLineBorder extends AbstractBorder {
-        private final Color color;
-        private final int radius;
-
-        private RoundedLineBorder(Color color, int radius) {
-            this.color = color;
-            this.radius = radius;
-        }
-
-        @Override
-        public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
-            Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(color);
-            g2.drawRoundRect(x, y, width - 1, height - 1, radius, radius);
-            g2.dispose();
-        }
-
-        @Override
-        public Insets getBorderInsets(Component c) {
-            return new Insets(2, 6, 2, 6);
-        }
-
-        @Override
-        public Insets getBorderInsets(Component c, Insets insets) {
-            insets.top = 2;
-            insets.left = 6;
-            insets.bottom = 2;
-            insets.right = 6;
-            return insets;
-        }
-    }
-
     /**
      * 设置滚动条的透明度和样式
      * @param scrollBar 滚动条组件
@@ -104,6 +71,8 @@ public class UIUtils {
              */
             private JButton createTransparentButton() {
                 JButton button = new JButton() {
+                    private static final long serialVersionUID = 1L;
+
                     @Override
                     protected void paintComponent(Graphics g) {
                         g.setColor(new Color(0, 0, 0, 0));
@@ -121,5 +90,39 @@ public class UIUtils {
                 return new Dimension(width, height);
             }
         });
+    }
+
+    private static class RoundedLineBorder extends AbstractBorder {
+        private static final long serialVersionUID = 1L;
+        private final Color color;
+        private final int radius;
+
+        private RoundedLineBorder(Color color, int radius) {
+            this.color = color;
+            this.radius = radius;
+        }
+
+        @Override
+        public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(color);
+            g2.drawRoundRect(x, y, width - 1, height - 1, radius, radius);
+            g2.dispose();
+        }
+
+        @Override
+        public Insets getBorderInsets(Component c) {
+            return new Insets(2, 6, 2, 6);
+        }
+
+        @Override
+        public Insets getBorderInsets(Component c, Insets insets) {
+            insets.top = 2;
+            insets.left = 6;
+            insets.bottom = 2;
+            insets.right = 6;
+            return insets;
+        }
     }
 }

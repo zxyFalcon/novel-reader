@@ -1,6 +1,6 @@
-package com.falcon.reader.model;
+package com.falcon.reader.ui.dialog;
 
-import com.falcon.reader.entity.Chapter;
+import com.falcon.reader.domain.Chapter;
 import com.falcon.reader.util.NumericDocumentFilter;
 
 import javax.swing.*;
@@ -106,7 +106,13 @@ public class ChapterDialog {
         dialog.pack();
         dialog.setLocationRelativeTo(frame);
         if (currentChapterIndex >= 0) {
-            chapterList.ensureIndexIsVisible(currentChapterIndex);
+            // The viewport has no usable extent until the dialog is shown. Running
+            // this before setVisible() therefore leaves long chapter lists at the
+            // beginning even though the current chapter is selected.
+            SwingUtilities.invokeLater(() -> {
+                chapterList.setSelectedIndex(currentChapterIndex);
+                chapterList.ensureIndexIsVisible(currentChapterIndex);
+            });
         }
         dialog.setVisible(true);
     }
@@ -126,11 +132,12 @@ public class ChapterDialog {
 
     private int findCurrentChapterIndex() {
         int selectedIndex = -1;
+        int selectedPage = Integer.MIN_VALUE;
         for (int i = 0; i < chapters.size(); i++) {
-            if (chapters.get(i).getPageIndex() <= initialPage) {
+            int chapterPage = chapters.get(i).getPageIndex();
+            if (chapterPage <= initialPage && chapterPage > selectedPage) {
                 selectedIndex = i;
-            } else {
-                break;
+                selectedPage = chapterPage;
             }
         }
         return selectedIndex;

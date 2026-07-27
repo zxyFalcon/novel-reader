@@ -1,10 +1,15 @@
-package com.falcon.reader.model;
+package com.falcon.reader.ui.view;
 
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.StrUtil;
-import com.falcon.reader.entity.novelItem.NovelItem;
-import com.falcon.reader.entity.novelItem.NovelItemRenderer;
-import com.falcon.reader.entity.NovelRecord;
+import com.falcon.reader.bookshelf.BookshelfQuery;
+import com.falcon.reader.bookshelf.BookshelfQuery.GroupMode;
+import com.falcon.reader.bookshelf.BookshelfQuery.SortMode;
+import com.falcon.reader.domain.NovelRecord;
+import com.falcon.reader.domain.ReadingData;
+import com.falcon.reader.persistence.ReadingRecordRepository;
+import com.falcon.reader.ui.component.NovelItem;
+import com.falcon.reader.ui.component.NovelItemRenderer;
 import com.falcon.reader.util.UIUtils;
 
 import javax.swing.*;
@@ -15,12 +20,8 @@ import javax.swing.plaf.basic.BasicMenuUI;
 import java.awt.*;
 import java.io.File;
 import java.io.IOException;
-import java.text.Collator;
-import java.time.LocalDateTime;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -37,7 +38,7 @@ public class HomeView {
     private static final int SEARCH_WIDTH = 100;
     private static final String SELECTED_MENU_ITEM_PROPERTY = "selectedMenuItem";
 
-    private JFrame frame;
+    private final JFrame frame;
     private JButton openButton;
     private JButton menuButton;
     private JButton closeButton;
@@ -45,38 +46,28 @@ public class HomeView {
     private JLabel groupHintLabel;
     private JScrollPane scrollPane;
     private JLabel emptyResultLabel;
-    private Consumer<String> openNovelCallback;
-    private Consumer<ReadingData> readingDataChangeCallback;
-    private Runnable settingsCallback;
-    private Runnable closeCallback;
+    private final Consumer<String> openNovelCallback;
+    private final Consumer<ReadingData> readingDataChangeCallback;
+    private final Runnable settingsCallback;
+    private final Runnable closeCallback;
     private ReadingData readingData;
+    private final ReadingRecordRepository recordRepository;
     private SortMode sortMode = SortMode.LAST_READING_TIME;
     private GroupMode groupMode = GroupMode.ALL;
 
     /**
-     * 构造函数，初始化主页视图
-     * @param frame 主窗口
-     * @param openNovelCallback 打开小说回调函数
-     * @param readingData
-     * @author zxy
+     * Creates the bookshelf view with its application callbacks and record repository.
      */
-    public HomeView(JFrame frame, Consumer<String> openNovelCallback, Runnable closeCallback, ReadingData readingData) {
-        this(frame, openNovelCallback, closeCallback, readingData, null, null);
-    }
-
     public HomeView(JFrame frame, Consumer<String> openNovelCallback, Runnable closeCallback, ReadingData readingData,
-            Consumer<ReadingData> readingDataChangeCallback) {
-        this(frame, openNovelCallback, closeCallback, readingData, readingDataChangeCallback, null);
-    }
-
-    public HomeView(JFrame frame, Consumer<String> openNovelCallback, Runnable closeCallback, ReadingData readingData,
-            Consumer<ReadingData> readingDataChangeCallback, Runnable settingsCallback) {
+                    Consumer<ReadingData> readingDataChangeCallback, Runnable settingsCallback,
+                    ReadingRecordRepository recordRepository) {
         this.frame = frame;
         this.openNovelCallback = openNovelCallback;
         this.closeCallback = closeCallback;
         this.readingData = readingData;
         this.readingDataChangeCallback = readingDataChangeCallback;
         this.settingsCallback = settingsCallback;
+        this.recordRepository = recordRepository;
         initComponents();
     }
 
@@ -91,12 +82,12 @@ public class HomeView {
         openButton.addActionListener(e -> {
             // 创建文件选择器，设置默认目录和文件过滤器
             JFileChooser fileChooser = new JFileChooser(".");
-            fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("文本文件 (*.txt)", "txt"));
+            fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("书籍文件 (*.txt, *.epub)", "txt", "epub"));
             // 显示文件选择对话框
             if (fileChooser.showOpenDialog(frame) == JFileChooser.APPROVE_OPTION) {
                 String selectedPath = fileChooser.getSelectedFile().getAbsolutePath();
-                // 检查文件路径是否有效且为txt格式
-                if (StrUtil.isNotBlank(selectedPath) && selectedPath.toLowerCase().endsWith(".txt")) {
+                // 检查文件路径是否有效且为支持的书籍格式
+                if (isSupportedBook(selectedPath)) {
                     openNovelCallback.accept(selectedPath);
                 } else {
                     // 显示错误消息
@@ -172,17 +163,13 @@ public class HomeView {
         DefaultListModel<NovelItem> listModel = new DefaultListModel<>();
         // 将阅读记录转换为NovelItem并添加到模型中
         if (CollectionUtil.isNotEmpty(readingData.getRecords())) {
-            List<Map.Entry<String, NovelRecord>> records = new ArrayList<>();
-            readingData.getRecords().forEach((path, record) -> {
-                if (matchesGroup(path, record) && matchesSearch(path)) {
-                    records.add(new java.util.AbstractMap.SimpleEntry<>(path, record));
-                }
-            });
-            sortRecords(records);
+            String keyword = searchField == null ? null : searchField.getText();
+            List<Map.Entry<String, NovelRecord>> records = BookshelfQuery.apply(
+                    readingData.getRecords(), keyword, sortMode, groupMode);
             records.forEach(entry -> listModel.addElement(new NovelItem(entry.getKey(), entry.getValue())));
         }
 
-        if ((isSearchActive() || groupMode != GroupMode.ALL) && listModel.isEmpty()) {
+        if (listModel.isEmpty()) {
             emptyResultLabel = createEmptyResultLabel();
             updateBounds();
             frame.add(emptyResultLabel);
@@ -249,16 +236,13 @@ public class HomeView {
         frame.repaint();
     }
 
-    private boolean matchesSearch(String filePath) {
-        if (searchField == null || StrUtil.isBlank(searchField.getText())) {
-            return true;
-        }
 
-        String keyword = searchField.getText().trim().toLowerCase(Locale.ROOT);
-        String normalizedPath = filePath.toLowerCase(Locale.ROOT);
-        Path path = Paths.get(filePath);
-        String fileName = path.getFileName() == null ? filePath : path.getFileName().toString();
-        return fileName.toLowerCase(Locale.ROOT).contains(keyword) || normalizedPath.contains(keyword);
+    private boolean isSupportedBook(String path) {
+        if (StrUtil.isBlank(path)) {
+            return false;
+        }
+        String lowerPath = path.toLowerCase(Locale.ROOT);
+        return lowerPath.endsWith(".txt") || lowerPath.endsWith(".epub");
     }
 
     private boolean isSearchActive() {
@@ -276,6 +260,9 @@ public class HomeView {
     private String getEmptyResultText() {
         if (isSearchActive()) {
             return "没有匹配的书籍";
+        }
+        if (CollectionUtil.isEmpty(readingData.getRecords())) {
+            return "书架还是空的，点击左上角“打开”添加书籍";
         }
         return "当前筛选项下没有书籍";
     }
@@ -551,94 +538,54 @@ public class HomeView {
         return System.getProperty("os.name", "").toLowerCase().contains("win");
     }
 
-    private void sortRecords(List<Map.Entry<String, NovelRecord>> records) {
-        if (sortMode == SortMode.NAME) {
-            Collator collator = Collator.getInstance(Locale.CHINA);
-            records.sort((first, second) -> collator.compare(getFileName(first.getKey()), getFileName(second.getKey())));
+    private void relocateNovel(NovelItem item) {
+        JFileChooser fileChooser = new JFileChooser(".");
+        fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("书籍文件 (*.txt, *.epub)", "txt", "epub"));
+        if (fileChooser.showOpenDialog(frame) != JFileChooser.APPROVE_OPTION) {
             return;
         }
 
-        records.sort((first, second) -> compareLastReadingTime(first.getValue(), second.getValue()));
-    }
-
-    private int compareLastReadingTime(NovelRecord first, NovelRecord second) {
-        LocalDateTime firstTime = first == null ? null : first.getLastReadingTime();
-        LocalDateTime secondTime = second == null ? null : second.getLastReadingTime();
-        if (firstTime == null && secondTime == null) {
-            return 0;
+        String oldPath = item.getFullPath();
+        String newPath = fileChooser.getSelectedFile().getAbsolutePath();
+        if (!isSupportedBook(newPath)) {
+            JOptionPane.showMessageDialog(frame, "无效的文件！", "错误", JOptionPane.ERROR_MESSAGE);
+            return;
         }
-        if (firstTime == null) {
-            return 1;
+        if (!Files.isRegularFile(Paths.get(newPath))) {
+            JOptionPane.showMessageDialog(frame, "文件不存在或无法读取。", "错误", JOptionPane.ERROR_MESSAGE);
+            return;
         }
-        if (secondTime == null) {
-            return -1;
+        if (oldPath.equals(newPath)) {
+            return;
         }
-        return secondTime.compareTo(firstTime);
-    }
+        if (readingData.getRecords().containsKey(newPath)) {
+            JOptionPane.showMessageDialog(frame, "该文件已经在书架中。", "无法重新定位", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
 
-    private String getFileName(String filePath) {
-        Path path = Paths.get(filePath);
-        return path.getFileName() == null ? filePath : path.getFileName().toString();
-    }
-
-    private boolean matchesGroup(String path, NovelRecord record) {
-        switch (groupMode) {
-            case UNREAD:
-                return Files.isRegularFile(Paths.get(path)) && isUnread(record);
-            case READING:
-                return Files.isRegularFile(Paths.get(path)) && !isUnread(record) && !isFinished(record);
-            case FINISHED:
-                return Files.isRegularFile(Paths.get(path)) && isFinished(record);
-            case MISSING:
-                return !Files.isRegularFile(Paths.get(path));
-            case ALL:
-            default:
-                return true;
+        boolean relocated = recordRepository.relocateRecord(oldPath, newPath);
+        if (relocated) {
+            readingData = recordRepository.loadRecord();
+            notifyReadingDataChanged();
+            updateNovelList(readingData);
+        } else {
+            JOptionPane.showMessageDialog(frame, "未找到可更新的阅读记录。", "重新定位失败", JOptionPane.WARNING_MESSAGE);
         }
     }
 
-    private boolean isFinished(NovelRecord record) {
-        if (record != null && record.getCurrentOffset() != null && record.getTotalLength() != null
-                && record.getTotalLength() > 0 && record.getCurrentOffset() >= record.getTotalLength()) {
-            return true;
-        }
-        if (record == null || record.getCurrentPage() == null || record.getTotalPages() == null || record.getTotalPages() <= 0) {
-            return false;
-        }
-        return record.getCurrentPage() + 1 >= record.getTotalPages();
-    }
-
-    private boolean isUnread(NovelRecord record) {
-        if (record != null && record.getCurrentOffset() != null) {
-            return record.getCurrentOffset() <= 0;
-        }
-        return record == null || record.getCurrentPage() == null || record.getCurrentPage() <= 0;
-    }
-
-    private enum SortMode {
-        NAME,
-        LAST_READING_TIME
-    }
-
-    private enum GroupMode {
-        ALL("全部"),
-        UNREAD("未读"),
-        READING("阅读中"),
-        FINISHED("已读"),
-        MISSING("失效");
-
-        private final String displayName;
-
-        GroupMode(String displayName) {
-            this.displayName = displayName;
-        }
-
-        private String getDisplayName() {
-            return displayName;
+    private void deleteNovel(NovelItem item) {
+        String path = item.getFullPath();
+        int confirm = JOptionPane.showConfirmDialog(frame, "是否删除 “" + item.getFileName() + "” ？", "删除记录", JOptionPane.YES_NO_OPTION);
+        if (confirm == JOptionPane.YES_OPTION) {
+            readingData.getRecords().remove(path);
+            recordRepository.deleteRecord(path);
+            notifyReadingDataChanged();
+            updateNovelList(readingData);
         }
     }
 
     private static class SearchField extends JTextField {
+        private static final long serialVersionUID = 1L;
         private static final int CLEAR_HIT_SIZE = 24;
         private final String placeholder;
         private boolean focused = false;
@@ -721,52 +668,6 @@ public class HomeView {
                 clearGraphics.drawString(clearText, x, y);
                 clearGraphics.dispose();
             }
-        }
-    }
-
-    private void relocateNovel(NovelItem item) {
-        JFileChooser fileChooser = new JFileChooser(".");
-        fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("文本文件 (*.txt)", "txt"));
-        if (fileChooser.showOpenDialog(frame) != JFileChooser.APPROVE_OPTION) {
-            return;
-        }
-
-        String oldPath = item.getFullPath();
-        String newPath = fileChooser.getSelectedFile().getAbsolutePath();
-        if (StrUtil.isBlank(newPath) || !newPath.toLowerCase().endsWith(".txt")) {
-            JOptionPane.showMessageDialog(frame, "无效的文件！", "错误", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        if (!Files.isRegularFile(Paths.get(newPath))) {
-            JOptionPane.showMessageDialog(frame, "文件不存在或无法读取。", "错误", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        if (oldPath.equals(newPath)) {
-            return;
-        }
-        if (readingData.getRecords().containsKey(newPath)) {
-            JOptionPane.showMessageDialog(frame, "该文件已经在书架中。", "无法重新定位", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        boolean relocated = ReadingRecord.relocateRecord(frame, oldPath, newPath);
-        if (relocated) {
-            readingData = ReadingRecord.loadRecord(frame);
-            notifyReadingDataChanged();
-            updateNovelList(readingData);
-        } else {
-            JOptionPane.showMessageDialog(frame, "未找到可更新的阅读记录。", "重新定位失败", JOptionPane.WARNING_MESSAGE);
-        }
-    }
-
-    private void deleteNovel(NovelItem item) {
-        String path = item.getFullPath();
-        int confirm = JOptionPane.showConfirmDialog(frame, "是否删除 “" + item.getFileName() + "” ？", "删除记录", JOptionPane.YES_NO_OPTION);
-        if (confirm == JOptionPane.YES_OPTION) {
-            readingData.getRecords().remove(path);
-            ReadingRecord.deleteRecord(frame, path);
-            notifyReadingDataChanged();
-            updateNovelList(readingData);
         }
     }
 

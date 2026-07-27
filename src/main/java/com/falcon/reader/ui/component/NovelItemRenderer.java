@@ -1,4 +1,4 @@
-package com.falcon.reader.entity.novelItem;
+package com.falcon.reader.ui.component;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -10,6 +10,7 @@ import java.awt.*;
  * @date 2024/10/21
  */
 public class NovelItemRenderer extends DefaultListCellRenderer {
+    private static final long serialVersionUID = 1L;
     private static final Color NORMAL_NAME_COLOR = Color.WHITE;
     private static final Color NORMAL_PROGRESS_COLOR = new Color(180, 220, 180);
     private static final Color MISSING_NAME_COLOR = new Color(150, 150, 150);
@@ -30,7 +31,7 @@ public class NovelItemRenderer extends DefaultListCellRenderer {
         return panel;
     }
 
-    public JPanel getPanelForItem(NovelItem novelItem) {
+    private JPanel getPanelForItem(NovelItem novelItem) {
         JPanel panel = new JPanel(new BorderLayout(4, 0));
         panel.setBorder(new EmptyBorder(6, 10, 6, 10));
         panel.setOpaque(false); // 设置透明
@@ -71,12 +72,8 @@ public class NovelItemRenderer extends DefaultListCellRenderer {
         return progressPanel;
     }
 
-    public Dimension getPreferredSizeForItem(NovelItem novelItem) {
-        JPanel panel = getPanelForItem(novelItem);
-        return panel.getPreferredSize(); // 获取 JPanel 的首选尺寸
-    }
-
     private static class ProgressCircle extends JComponent {
+        private static final long serialVersionUID = 1L;
         private static final int SIZE = 12;
         private final Integer percent;
         private final Color progressColor;
