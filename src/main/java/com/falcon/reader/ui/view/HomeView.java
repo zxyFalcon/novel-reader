@@ -41,6 +41,7 @@ public class HomeView {
     private final JFrame frame;
     private JButton openButton;
     private JButton menuButton;
+    private JButton minimizeButton;
     private JButton closeButton;
     private JTextField searchField;
     private JLabel groupHintLabel;
@@ -122,10 +123,15 @@ public class HomeView {
         frame.add(groupHintLabel);
 
         menuButton = createMenuButton();
-        menuButton.setBounds(frame.getWidth() - 65, 10, 25, 25);
+        menuButton.setBounds(frame.getWidth() - 95, 10, 25, 25);
         menuButton.setMargin(new Insets(0, 0, 0, 0));
         menuButton.addActionListener(e -> showHomeMenu());
         frame.add(menuButton);
+
+        minimizeButton = UIUtils.createStyledButton("-", frame.getWidth() - 65, 10, 25, 25);
+        minimizeButton.setFont(new Font("Dialog", Font.PLAIN, 14));
+        minimizeButton.addActionListener(e -> frame.setState(JFrame.ICONIFIED));
+        frame.add(minimizeButton);
 
         // 创建并配置关闭按钮
         closeButton = UIUtils.createStyledButton("×", frame.getWidth() - 35, 10, 25, 25);
@@ -681,16 +687,19 @@ public class HomeView {
         if (closeButton != null) {
             closeButton.setBounds(Math.max(0, frame.getWidth() - 35), 10, 25, 25);
         }
+        if (minimizeButton != null) {
+            minimizeButton.setBounds(Math.max(0, frame.getWidth() - 65), 10, 25, 25);
+        }
         if (menuButton != null) {
-            menuButton.setBounds(Math.max(0, frame.getWidth() - 65), 10, 25, 25);
+            menuButton.setBounds(Math.max(0, frame.getWidth() - 95), 10, 25, 25);
         }
         if (searchField != null) {
-            searchField.setBounds(SEARCH_X, 10, Math.min(SEARCH_WIDTH, Math.max(0, frame.getWidth() - SEARCH_X - 75)), 35);
+            searchField.setBounds(SEARCH_X, 10, Math.min(SEARCH_WIDTH, Math.max(0, frame.getWidth() - SEARCH_X - 105)), 35);
         }
         if (groupHintLabel != null) {
             FontMetrics metrics = groupHintLabel.getFontMetrics(groupHintLabel.getFont());
             int hintWidth = Math.min(metrics.stringWidth(groupHintLabel.getText()) + 8, 110);
-            int hintX = Math.max(SEARCH_X + SEARCH_WIDTH + 8, frame.getWidth() - 65 - hintWidth - 8);
+            int hintX = Math.max(SEARCH_X + SEARCH_WIDTH + 8, frame.getWidth() - 95 - hintWidth - 8);
             groupHintLabel.setBounds(hintX, 12, hintWidth, 25);
         }
         if (scrollPane != null) {
@@ -715,6 +724,7 @@ public class HomeView {
     public void show() {
         openButton.setVisible(true);
         menuButton.setVisible(true);
+        minimizeButton.setVisible(true);
         closeButton.setVisible(true);
         searchField.setVisible(true);
         groupHintLabel.setVisible(groupMode != GroupMode.ALL);
@@ -734,6 +744,7 @@ public class HomeView {
     public void hide() {
         openButton.setVisible(false);
         menuButton.setVisible(false);
+        minimizeButton.setVisible(false);
         closeButton.setVisible(false);
         searchField.setVisible(false);
         groupHintLabel.setVisible(false);
